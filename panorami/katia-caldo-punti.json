@@ -1,0 +1,14 @@
+{
+ "nome": "Appartamento Katia, arredo caldo contemporaneo",
+ "nota": "Punti fissi della visita a 360 gradi. pos = posizione della macchina in metri (coordinate della casa, z = altezza degli occhi). Ogni foto e' un'equirettangolare di Blender 2:1 con il centro dell'immagine che guarda verso +y (nord, verso la camera da letto). vicini = punti raggiungibili da qui con un tocco. Stessi punti della casa vera, con l'arredo alternativo (TOUR3D_ARREDO=caldo).",
+ "partenza": "soggiorno",
+ "punti": [
+  {"id": "soggiorno", "nome": "Soggiorno", "pos": [1.9, 2.9, 1.5], "file": "katia-caldo-soggiorno.jpg", "vicini": ["finestra", "ingresso", "balcone"], "esposizione": 1.1, "temperatura": 4900, "sole": [150, 20]},
+  {"id": "finestra", "nome": "Soggiorno, vicino alla portafinestra", "pos": [2.6, 0.85, 1.5], "file": "katia-caldo-finestra.jpg", "vicini": ["soggiorno", "balcone", "ingresso"], "esposizione": 1.1, "temperatura": 4900, "sole": [150, 20]},
+  {"id": "balcone", "nome": "Balcone", "pos": [2.7, -1.05, 1.5], "file": "katia-caldo-balcone.jpg", "vicini": ["finestra", "soggiorno"], "esposizione": -1.4, "temperatura": 5600, "sole": [140, 24]},
+  {"id": "ingresso", "nome": "Ingresso", "pos": [3.3, 5.3, 1.5], "file": "katia-caldo-ingresso.jpg", "vicini": ["soggiorno", "bagno", "camera"], "esposizione": 1.1, "temperatura": 4900, "sole": [152, 21]},
+  {"id": "bagno", "nome": "Bagno", "pos": [1.55, 5.42, 1.5], "file": "katia-caldo-bagno.jpg", "vicini": ["ingresso"], "esposizione": 0.6},
+  {"id": "camera", "nome": "Camera", "pos": [2.45, 7.0, 1.5], "file": "katia-caldo-camera.jpg", "vicini": ["ingresso", "camera-finestra"], "esposizione": 1.8, "temperatura": 4900},
+  {"id": "camera-finestra", "nome": "Camera, vicino alla portafinestra", "pos": [2.45, 9.3, 1.5], "file": "katia-caldo-camera-finestra.jpg", "vicini": ["camera"], "esposizione": 1.7, "temperatura": 4900}
+ ]
+}
