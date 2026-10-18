@@ -287,9 +287,17 @@ function byteDi(r, urgente) {
   return r.attesa.p;
 }
 // la foto diventa una cube map (come fa panorama.html con scene.background): niente cuciture, filtri buoni
-const LATO = Math.min(1024, renderer.capabilities.maxCubemapSize || 1024);
+// sul computer facce del cubo fino a 2048 (le foto sono 6144x3072); sul telefono 1024, per la memoria
+const TELEFONO = matchMedia("(pointer: coarse)").matches;
+const LATO = Math.min(TELEFONO ? 1024 : 2048, renderer.capabilities.maxCubemapSize || 1024);
+const LARGHEZZA_MAX = Math.min(TELEFONO ? 4096 : 8192, renderer.capabilities.maxTextureSize || 4096);
 async function faiCubo(blob) {
-  const bmp = await createImageBitmap(blob, { imageOrientation: "flipY" });
+  let bmp = await createImageBitmap(blob, { imageOrientation: "flipY" });
+  if (bmp.width > LARGHEZZA_MAX) {       // foto più grande di quanto la scheda del telefono accetta: si rimpicciolisce prima
+    const piccola = await createImageBitmap(bmp, { resizeWidth: LARGHEZZA_MAX, resizeHeight: LARGHEZZA_MAX / 2, resizeQuality: "high" });
+    bmp.close?.();
+    bmp = piccola;
+  }
   const tex = new THREE.Texture(bmp);
   tex.mapping = THREE.EquirectangularReflectionMapping;
   tex.colorSpace = THREE.SRGBColorSpace;
