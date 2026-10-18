@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visita 3D</title>
+<meta name="description" content="Visita 3D dell'appartamento: guardati intorno e muoviti stanza per stanza.">
+<meta name="theme-color" content="#121514">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23121514'/%3E%3Cpath d='M8 15 16 8l8 7v9H8z' fill='%236bbcae'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+  :root {
+    --sfondo: #121514;
+    --vetro: rgba(17, 20, 19, 0.56);
+    --vetro-forte: rgba(17, 20, 19, 0.78);
+    --bordo: rgba(255, 255, 255, 0.13);
+    --luce-bordo: rgba(255, 255, 255, 0.10);
+    --testo: #f2f1ed;
+    --testo-2: rgba(242, 241, 237, 0.70);
+    --accento: #6bbcae;
+    --accento-scuro: #15302b;
+    --ombra: 0 14px 40px rgba(6, 12, 10, 0.32), 0 2px 8px rgba(6, 12, 10, 0.22);
+    --molla: cubic-bezier(0.22, 1, 0.36, 1);
+    --r-pannello: 16px;
+    --gutter: max(16px, env(safe-area-inset-left));
+    --display: "Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif;
+    --ui: "Hanken Grotesk", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--sfondo); color: var(--testo); font-family: var(--ui);
+    -webkit-font-smoothing: antialiased; overflow: hidden; overscroll-behavior: none; }
+  canvas#scena { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none;
+    cursor: grab; outline: none; }
+  canvas#scena.trascina { cursor: grabbing; }
+
+  /* vetro scuro: approssimazione web del materiale frosted, con fondo pieno se la trasparenza è ridotta */
+  .vetro { background: var(--vetro); border: 1px solid var(--bordo);
+    backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: inset 0 1px 0 var(--luce-bordo), var(--ombra); }
+  @media (prefers-reduced-transparency: reduce) { .vetro { background: var(--vetro-forte); backdrop-filter: none; -webkit-backdrop-filter: none; } }
+
+  .ui { position: fixed; z-index: 2; transition: opacity 0.5s var(--molla), transform 0.5s var(--molla); }
+  .nascosto { opacity: 0; pointer-events: none; }
+
+  /* in alto */
+  #intestazione { top: max(16px, env(safe-area-inset-top)); left: var(--gutter); right: var(--gutter);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none; }
+  #nome { pointer-events: auto; padding: 9px 16px 10px; border-radius: 999px; font-family: var(--display);
+    font-weight: 600; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #nome span { color: var(--testo-2); font-family: var(--ui); font-weight: 500; margin-left: 8px; }
+  .comandi { display: flex; gap: 8px; pointer-events: auto; }
+
+  .tondo { width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center; color: var(--testo);
+    font-size: 19px; cursor: pointer; transition: transform 0.25s var(--molla), background-color 0.25s var(--molla); }
+  .tondo:hover { background: rgba(40, 46, 44, 0.72); }
+  .tondo.testo { font-family: var(--display); font-weight: 600; font-size: 13px; letter-spacing: -0.01em; text-decoration: none; }
+  a.tondo:focus-visible { outline: 2px solid var(--accento); outline-offset: 3px; }
+  .tondo:active { transform: scale(0.94); }
+  button { font: inherit; color: inherit; border: 0; background: none; }
+  button:focus-visible { outline: 2px solid var(--accento); outline-offset: 3px; }
+
+  /* pulsanti delle stanze */
+  #stanze { left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    display: flex; gap: 4px; padding: 5px; border-radius: 999px; max-width: calc(100vw - 2 * var(--gutter));
+    overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  #stanze::-webkit-scrollbar { display: none; }
+  #stanze.scorre-dx { -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent); mask-image: linear-gradient(90deg, #000 82%, transparent); }
+  #stanze.scorre-sx { -webkit-mask-image: linear-gradient(270deg, #000 82%, transparent); mask-image: linear-gradient(270deg, #000 82%, transparent); }
+  #stanze.scorre-sx.scorre-dx { -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); }
+  .stanza { scroll-snap-align: center; flex: none; padding: 10px 17px; border-radius: 999px; font-size: 14.5px;
+    font-weight: 500; color: var(--testo-2); cursor: pointer; white-space: nowrap;
+    transition: transform 0.25s var(--molla), color 0.25s var(--molla), background-color 0.3s var(--molla); }
+  .stanza:hover { color: var(--testo); background: rgba(255, 255, 255, 0.07); }
+  .stanza:active { transform: scale(0.96); }
+  .stanza[aria-pressed="true"] { color: var(--accento-scuro); background: var(--accento); }
+
+  /* suggerimento iniziale */
+  #suggerimento { left: 50%; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 66px); transform: translateX(-50%);
+    padding: 10px 16px; border-radius: 999px; font-size: 14px; color: var(--testo); white-space: nowrap;
+    display: flex; align-items: center; gap: 10px; pointer-events: none; }
+  #suggerimento i { font-size: 18px; color: var(--accento); }
+  #suggerimento.nascosto { transform: translate(-50%, 8px); }
+
+  /* avviso legale */
+  #avviso { left: var(--gutter); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 4px); font-size: 11.5px;
+    color: rgba(242, 241, 237, 0.62); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55); max-width: 210px; line-height: 1.4; }
+
+  /* aiuto */
+  #aiuto { top: calc(max(16px, env(safe-area-inset-top)) + 54px); right: var(--gutter); width: min(300px, calc(100vw - 2 * var(--gutter)));
+    padding: 18px 20px; border-radius: var(--r-pannello); transform-origin: top right; }
+  #aiuto.nascosto { transform: translateY(-6px) scale(0.98); }
+  #aiuto h2 { font-family: var(--display); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 12px; }
+  #aiuto dl { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; font-size: 14px; line-height: 1.45; }
+  #aiuto dt { color: var(--accento); font-size: 18px; line-height: 1.2; }
+  #aiuto dd { color: var(--testo-2); }
+  #aiuto dd b { color: var(--testo); font-weight: 600; }
+
+  /* velo per i salti tra stanze */
+  #velo { position: fixed; inset: 0; z-index: 1; background: var(--sfondo); opacity: 0; pointer-events: none;
+    transition: opacity 0.22s ease; }
+  #velo.attivo { opacity: 1; }
+
+  /* caricamento */
+  #carica { position: fixed; inset: 0; z-index: 3; display: grid; place-items: center; padding: 24px;
+    background: radial-gradient(120% 90% at 20% 10%, #1d2422 0%, transparent 60%),
+                radial-gradient(90% 80% at 85% 90%, #1a2321 0%, transparent 55%), var(--sfondo);
+    transition: opacity 0.7s var(--molla); }
+  #carica::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  #carica.finito { opacity: 0; pointer-events: none; }
+  .carica-testo { width: min(340px, 100%); }
+  #carica h1 { font-family: var(--display); font-weight: 600; font-size: clamp(30px, 6vw, 42px); letter-spacing: -0.03em;
+    line-height: 1.05; margin-bottom: 10px; }
+  #carica p { color: var(--testo-2); font-size: 15px; line-height: 1.6; display: flex; justify-content: space-between; gap: 12px; }
+  #barra { height: 2px; margin-top: 22px; background: var(--accento); transform-origin: left; transform: scaleX(0);
+    transition: transform 0.35s var(--molla); border-radius: 2px; }
+  #errore { display: none; margin-top: 18px; color: #f0b4a8; font-size: 14.5px; line-height: 1.55; }
+
+  @media (max-width: 640px) {
+    #nome span { display: none; }
+    #avviso { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 66px); max-width: 180px; }
+    #suggerimento { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 112px); white-space: normal; width: calc(100vw - 2 * var(--gutter)); max-width: 360px; justify-content: center; text-align: left; }
+    .stanza { padding: 10px 14px; font-size: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ui, .stanza, .tondo, #barra, #carica, #velo { transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+<canvas id="scena" tabindex="0" aria-label="Visita 3D: trascina per guardarti intorno"></canvas>
+<div id="velo"></div>
+
+<div id="carica" role="status" aria-live="polite">
+  <div class="carica-testo">
+    <h1 id="carica-nome">Visita 3D</h1>
+    <p><span id="carica-stato">Preparo la visita</span><span id="carica-pct">0%</span></p>
+    <div id="barra"></div>
+    <div id="errore">Non riesco a caricare la visita. Ricarica la pagina o riprova più tardi.</div>
+  </div>
+</div>
+
+<header id="intestazione" class="ui nascosto">
+  <div id="nome" class="vetro">Visita 3D</div>
+  <div class="comandi">
+    <a id="btn-360" class="tondo vetro testo" href="tour360.html" aria-label="Versione a 360 gradi, alla qualità piena">360</a>
+    <button id="btn-aiuto" class="tondo vetro" aria-label="Come muoversi" aria-expanded="false" aria-controls="aiuto"><i class="ph ph-question"></i></button>
+    <button id="btn-schermo" class="tondo vetro" aria-label="Schermo intero"><i class="ph ph-corners-out"></i></button>
+  </div>
+</header>
+
+<section id="aiuto" class="ui vetro nascosto" aria-label="Come muoversi">
+  <h2>Come muoversi</h2>
+  <dl>
+    <dt><i class="ph ph-hand-grabbing"></i></dt><dd><b>Guardati intorno</b> trascinando</dd>
+    <dt><i class="ph ph-footprints"></i></dt><dd><b>Spostati</b> <span id="aiuto-tocca">cliccando</span> sul pavimento</dd>
+    <dt><i class="ph ph-keyboard"></i></dt><dd><b>Tastiera</b> W A S D o le frecce</dd>
+    <dt><i class="ph ph-magnifying-glass-plus"></i></dt><dd><b>Zoom</b> con la rotella o con due dita</dd>
+    <dt><i class="ph ph-door-open"></i></dt><dd><b>Stanze</b> con i pulsanti in basso</dd>
+  </dl>
+</section>
+
+<div id="suggerimento" class="ui vetro nascosto"><i class="ph ph-hand-grabbing"></i><span id="suggerimento-testo"></span></div>
+<nav id="stanze" class="ui vetro nascosto" aria-label="Stanze"></nav>
+<p id="avviso" class="ui nascosto">Ricostruzione 3D indicativa: arredi e misure possono differire.</p>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { Reflector } from "three/addons/objects/Reflector.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+
+const $ = (id) => document.getElementById(id);
+const parametri = new URLSearchParams(location.search);
+const CASA = (parametri.get("casa") || "katia").replace(/[^a-z0-9-]/gi, "");
+const movimentoRidotto = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const touch = matchMedia("(pointer: coarse)").matches;
+window.__tour = { pronto: false };
+
+// ---------- renderer, scena, camera
+const canvas = $("scena");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = { agx: THREE.AgXToneMapping, aces: THREE.ACESFilmicToneMapping }[parametri.get("tono")] || THREE.NeutralToneMapping;
+
+// resa "blender" (predefinita): la scena si disegna grezza, in luce lineare, poi passa per una piccola catena:
+// ombre di contatto (GTAO), bagliore sulle luci forti, curva dei colori di Blender (AgX, contrasto medio-alto),
+// vignettatura e grana leggerissime. ?ao=0 e ?cinema=0 spengono i singoli passaggi per i confronti.
+const RESA_BLENDER = (parametri.get("resa") || "blender") === "blender";
+const CON_AO = parametri.get("ao") !== "0";
+const CON_CINEMA = parametri.get("cinema") !== "0";
+let catena = null, passoColori = null, passoAO = null, passoBagliore = null, cieloMat = null;
+const SHADER_COLORI = {
+  uniforms: { tDiffuse: { value: null }, tTabella: { value: null }, esposizione: { value: 1 },
+              vignetta: { value: CON_CINEMA ? 0.22 : 0 }, grana: { value: CON_CINEMA ? 0.012 : 0 } },
+  vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform sampler2D tTabella; uniform float esposizione, vignetta, grana; varying vec2 vUv;
+    const float N = 33.0; const float LMIN = -12.0; const float LMAX = 6.0;
+    vec3 tabella(vec3 t) {
+      vec3 s = t * (N - 1.0);
+      float b0 = floor(s.b), b1 = min(b0 + 1.0, N - 1.0), f = s.b - b0, v = (s.g + 0.5) / N;
+      vec3 c0 = texture2D(tTabella, vec2((b0 * N + s.r + 0.5) / (N * N), v)).rgb;
+      vec3 c1 = texture2D(tTabella, vec2((b1 * N + s.r + 0.5) / (N * N), v)).rgb;
+      return mix(c0, c1, f);
+    }
+    float caso(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main() {
+      vec2 d = (vUv - 0.5) * vec2(1.0, 0.82);
+      float vig = 1.0 - vignetta * pow(clamp(length(d) * 1.45, 0.0, 1.0), 2.4);
+      vec3 c = max(texture2D(tDiffuse, vUv).rgb * esposizione * vig, vec3(1e-7));
+      vec3 o = tabella(clamp((log2(c) - LMIN) / (LMAX - LMIN), 0.0, 1.0));
+      o += (caso(gl_FragCoord.xy) - 0.5) * grana;
+      gl_FragColor = vec4(o, 1.0);
+    }`,
+};
+let tabella = null;
+if (RESA_BLENDER) {
+  renderer.toneMapping = THREE.NoToneMapping;
+  tabella = new THREE.TextureLoader().load("resa/agx-medio-alto.png", () => { sporco = true; });
+  tabella.colorSpace = THREE.NoColorSpace;
+  tabella.generateMipmaps = false;
+  tabella.minFilter = tabella.magFilter = THREE.LinearFilter;
+}
+const scena = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(68, 1, 0.05, 200);
+camera.rotation.order = "YXZ";
+if (RESA_BLENDER) {
+  catena = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
+  catena.addPass(new RenderPass(scena, camera));
+  if (CON_AO) {
+    passoAO = new GTAOPass(scena, camera, 1, 1);
+    passoAO.blendIntensity = 0.75;
+    passoAO.updateGtaoMaterial({ radius: 0.18, distanceExponent: 1.4, thickness: 1.2, scale: 1.0,
+                                samples: matchMedia("(pointer: coarse)").matches ? 8 : 16 });
+    // specchi e vetri fuori dal calcolo delle ombre: lo specchio ridisegnerebbe la stanza una volta in più,
+    // e il vetro coprirebbe le ombre della stanza che si vede attraverso
+    const nascondi = passoAO.overrideVisibility.bind(passoAO);
+    passoAO.overrideVisibility = () => {
+      nascondi();
+      scena.traverse((o) => { if (o.isReflector || (o.isMesh && o.material.transparent)) o.visible = false; });
+    };
+    catena.addPass(passoAO);
+  }
+  if (CON_CINEMA) catena.addPass(passoBagliore = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.45, 2.2));
+  passoColori = new ShaderPass(SHADER_COLORI);
+  passoColori.uniforms.tTabella.value = tabella; // ShaderPass copia le uniform: la tabella va data dopo
+  catena.addPass(passoColori);
+}
+
+// cielo: sfera sfumata (sopra l'orizzonte azzurro chiaro, sotto un verde grigio da giardino)
+{
+  const g = new THREE.SphereGeometry(80, 48, 24);
+  const col = [], alto = new THREE.Color("#c9def0"), oriz = new THREE.Color("#f1efe8"), basso = new THREE.Color("#a9b49a");
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const t = p.getY(i) / 80, c = new THREE.Color();
+    if (t >= 0) c.lerpColors(oriz, alto, Math.pow(t, 0.6)); else c.lerpColors(oriz, basso, Math.min(1, -t * 4));
+    col.push(c.r, c.g, c.b);
+  }
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  cieloMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, toneMapped: false, depthWrite: false });
+  const cielo = new THREE.Mesh(g, cieloMat);
+  cielo.position.set(1.9, 1.2, -5);
+  cielo.renderOrder = -1;
+  scena.add(cielo);
+}
+
+// coordinate di pianta (quelle di Blender: x, y) <-> Three.js (x, -z)
+const in3d = (px, py, h) => new THREE.Vector3(px, h, -py);
+
+// ---------- stato della visita
+let dati = null, pavimenti = [], solidi = [];
+// campo visivo verticale: più largo con il telefono in verticale, dove lo schermo è stretto
+const fovBase = () => (innerWidth / innerHeight < 0.8 ? 84 : 68);
+let zoomato = false;
+const vista = { px: 0, py: 0, yaw: 0, pitch: -0.08, fov: fovBase() };
+let animazione = null, sporco = true;
+const vel = { yaw: 0, pitch: 0 };
+const RAGGIO = 0.15;
+const dentro = (px, py, [, x0, y0, x1, y1]) => px > x0 - RAGGIO && px < x1 + RAGGIO && py > y0 - RAGGIO && py < y1 + RAGGIO;
+
+// libero = dentro una zona calpestabile e fuori dagli ingombri dei mobili.
+// "ignora" sono gli ingombri in cui ci si trova già: da lì si può sempre uscire.
+function libero(px, py, ignora = []) {
+  if (!dati) return false;
+  const inZona = dati.zone.some(([x0, y0, x1, y1]) => px >= x0 && px <= x1 && py >= y0 && py <= y1);
+  if (!inZona) return false;
+  return !dati.ingombri.some((g) => !ignora.includes(g) && dentro(px, py, g));
+}
+const intorno = () => (dati ? dati.ingombri.filter((g) => dentro(vista.px, vista.py, g)) : []);
+
+// percorso dritto: si ferma all'ultimo punto libero prima di un ostacolo
+function finoA(px, py) {
+  const dx = px - vista.px, dy = py - vista.py, d = Math.hypot(dx, dy);
+  const passi = Math.max(1, Math.ceil(d / 0.05)), ignora = intorno();
+  let ultimo = [vista.px, vista.py];
+  for (let i = 1; i <= passi; i++) {
+    const x = vista.px + dx * i / passi, y = vista.py + dy * i / passi;
+    if (!libero(x, y, ignora)) break;
+    ultimo = [x, y];
+  }
+  return ultimo;
+}
+
+function liberoVicino(px, py) {
+  if (libero(px, py)) return [px, py];
+  for (let r = 0.05; r <= 1.0; r += 0.05)
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+      const x = px + Math.cos(a) * r, y = py + Math.sin(a) * r;
+      if (libero(x, y)) return [x, y];
+    }
+  return null;
+}
+
+function stanzaDi(px, py) {
+  if (py > 6.15) return "Camera";
+  if (px < 2.75 && py > 4.35 && py < 6.15) return "Bagno";
+  if (px >= 2.75 && py > 4.35) return "Ingresso";
+  if (px < 2.85 && py > 2.6 && py < 4.35) return "Cucina";
+  return "Soggiorno";
+}
+
+function aggiornaCamera() {
+  camera.position.copy(in3d(vista.px, vista.py, dati ? dati.altezza_occhi : 1.55));
+  camera.rotation.set(vista.pitch, vista.yaw - Math.PI / 2, 0);
+  if (camera.fov !== vista.fov) { camera.fov = vista.fov; camera.updateProjectionMatrix(); }
+}
+
+const curva = (t) => 1 - Math.pow(1 - t, 3);
+const angolo = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+function vaiA(px, py, yaw = vista.yaw, pitch = vista.pitch, durata) {
+  const da = { ...vista }, dyaw = angolo(yaw - da.yaw);
+  const d = Math.hypot(px - da.px, py - da.py);
+  durata = movimentoRidotto ? 1 : (durata ?? Math.min(1400, 420 + d * 330));
+  const t0 = performance.now();
+  animazione = (ora) => {
+    const t = Math.min(1, (ora - t0) / durata), k = curva(t);
+    vista.px = da.px + (px - da.px) * k;
+    vista.py = da.py + (py - da.py) * k;
+    vista.yaw = da.yaw + dyaw * k;
+    vista.pitch = da.pitch + (pitch - da.pitch) * k;
+    if (t >= 1) { animazione = null; segnaStanza(); }
+  };
+  sporco = true;
+}
+
+function guardaVerso(px, py, [gx, gy, gz]) {
+  const h = dati.altezza_occhi;
+  return [Math.atan2(gy - py, gx - px), Math.atan2(gz - h, Math.hypot(gx - px, gy - py))];
+}
+
+let salto = false;
+function vaiInStanza(s, subito = false) {
+  const [yaw, pitch] = guardaVerso(s.pos[0], s.pos[1], s.guarda);
+  const [fx, fy] = finoA(s.pos[0], s.pos[1]);
+  const dritto = Math.hypot(fx - s.pos[0], fy - s.pos[1]) < 0.05;
+  if (subito) {
+    Object.assign(vista, { px: s.pos[0], py: s.pos[1], yaw, pitch });
+    sporco = true; segnaStanza(s.nome); return;
+  }
+  if (dritto) { vaiA(s.pos[0], s.pos[1], yaw, pitch); segnaStanza(s.nome); return; }
+  // stanza dietro un muro: velo, salto, velo via
+  if (salto) return;
+  salto = true;
+  $("velo").classList.add("attivo");
+  setTimeout(() => {
+    Object.assign(vista, { px: s.pos[0], py: s.pos[1], yaw, pitch });
+    animazione = null; sporco = true; segnaStanza(s.nome);
+    requestAnimationFrame(() => { $("velo").classList.remove("attivo"); salto = false; });
+  }, movimentoRidotto ? 0 : 230);
+}
+
+function segnaStanza(nome) {
+  nome = nome || stanzaDi(vista.px, vista.py);
+  document.querySelectorAll(".stanza").forEach((b) => {
+    const attivo = b.dataset.nome === nome;
+    if (attivo && b.getAttribute("aria-pressed") !== "true" && $("stanze").scrollWidth > $("stanze").clientWidth)
+      b.scrollIntoView({ inline: "center", block: "nearest", behavior: movimentoRidotto ? "auto" : "smooth" });
+    b.setAttribute("aria-pressed", String(attivo));
+  });
+}
+
+// ---------- caricamento
+const pct = (v) => { $("barra").style.transform = `scaleX(${v})`; $("carica-pct").textContent = Math.round(v * 100) + "%"; };
+
+async function carica() {
+  dati = await (await fetch(`modelli/${CASA}.json`)).json();
+  $("carica-nome").textContent = dati.nome;
+  $("nome").innerHTML = "";
+  $("nome").append(dati.nome);
+  document.title = `${dati.nome}, visita 3D`;
+  const esp = Number(parametri.get("esposizione"));
+  if (RESA_BLENDER) passoColori.uniforms.esposizione.value = Math.pow(2, esposizioneBase = esp || (dati.esposizione_blender ?? 0.6));
+  else renderer.toneMappingExposure = Math.pow(2, esp || dati.esposizione);
+
+  const draco = new DRACOLoader().setDecoderPath("https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/");
+  const loader = new GLTFLoader().setDRACOLoader(draco);
+  // la casa intera è un elenco di stanze cotte a parte (dati.modelli); una stanza sola è il file con lo stesso nome
+  const elenco = dati.modelli || [CASA];
+  const avanzamento = elenco.map(() => ({ caricati: 0, totale: 0 }));
+  const segna = () => {
+    const tot = avanzamento.reduce((a, m) => a + m.totale, 0), car = avanzamento.reduce((a, m) => a + m.caricati, 0);
+    if (tot) pct(0.05 + 0.9 * car / tot * avanzamento.filter((m) => m.totale).length / elenco.length);
+  };
+  const caricati = await Promise.all(elenco.map((nome, i) => loader.loadAsync(`modelli/${nome}.glb`, (e) => {
+    avanzamento[i] = { caricati: e.loaded, totale: e.total || 0 }; segna();
+  })));
+  $("carica-stato").textContent = "Sistemo la luce";
+
+  const aniso = renderer.capabilities.getMaxAnisotropy();
+  // bilanciamento del bianco: toglie la dominante calda dei rimbalzi sul parquet
+  const bianco = new THREE.Color().setRGB(...((RESA_BLENDER ? dati.bilanciamento_blender : dati.bilanciamento) || [1, 1, 1]));
+  // vetro: quasi solo riflesso, senza velo bianco (come nei render di Blender)
+  const vetro = new THREE.MeshBasicMaterial({ color: 0x1e2224, transparent: true, opacity: 0.22, depthWrite: false });
+  const specchi = [], riflessi = [], metalli = [], fisici = [];
+  // bilanciamento del bianco per stanza (le stanze di giorno tirano al giallo, il bagno ha la sua lampada)
+  const bilanci = caricati.map((_, i) => new THREE.Color().setRGB(...((dati.bilanciamento_modelli || {})[elenco[i]] ||
+    (RESA_BLENDER ? dati.bilanciamento_blender : dati.bilanciamento) || [1, 1, 1])));
+  caricati.forEach((gltf, i) => gltf.scene.traverse((o) => {
+    const bianco = bilanci[i];
+    if (!o.isMesh) return;
+    const m = o.material;
+    if (o.userData.vetro || o.name.endsWith("vetro")) {
+      o.material = vetro.clone(); o.renderOrder = 2; riflessi.push([o, 0.65, THREE.MixOperation]); return;
+    }
+    if (o.userData.specchio || o.name.endsWith("specchio")) { specchi.push(o); return; }
+    if (o.userData.metallo) { metalli.push(o); return; }
+    if (m.map) { m.map.anisotropy = aniso; m.map.channel = 0; }
+    if (m.emissiveMap) m.emissiveMap.channel = 0;
+    // colore x luce cotta: Three.js divide la lightmap per pi greco, la luce era salvata divisa per scala_luce
+    if (m.roughnessMap) {
+      // materiale fisico: colore e luce cotti, in più il riflesso (lucido o satinato secondo la mappa)
+      m.roughnessMap.channel = 0;
+      o.material = new THREE.MeshStandardMaterial({ map: m.map || null, lightMap: m.emissiveMap || null,
+        lightMapIntensity: dati.scala_luce * Math.PI, roughnessMap: m.roughnessMap, roughness: 1, metalness: 0,
+        color: m.map ? bianco : m.color });
+      fisici.push(o);
+    } else {
+      o.material = new THREE.MeshBasicMaterial({ map: m.map || null, lightMap: m.emissiveMap || null,
+        lightMapIntensity: dati.scala_luce * Math.PI, color: m.map ? bianco : m.color });
+      const l = LUCIDI.find(([re]) => re.test(o.name));
+      if (l) riflessi.push([o, l[1], l[2]]);
+    }
+    m.dispose();
+    solidi.push(o);
+    if (/pavimento/i.test(o.name)) pavimenti.push(o);
+  }));
+  for (const gltf of caricati) { scena.add(gltf.scene); gltf.scene.updateMatrixWorld(true); }
+  specchi.forEach(faiSpecchio);
+  aggiungiRiflessi(riflessi, metalli, fisici);
+
+  // pulsanti delle stanze
+  for (const s of dati.stanze) {
+    const b = document.createElement("button");
+    b.className = "stanza"; b.textContent = s.nome; b.dataset.nome = s.nome; b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () => { nascondiSuggerimento(); vaiInStanza(s); });
+    $("stanze").append(b);
+  }
+  const iniziale = dati.stanze.find((s) => s.nome.toLowerCase() === (parametri.get("stanza") || "").toLowerCase()) || dati.stanze[0];
+  vaiInStanza(iniziale, true);
+  bordiStanze();
+  aggiornaCamera();
+  renderer.compile(scena, camera);
+  pct(1);
+  $("carica").classList.add("finito");
+  ["intestazione", "stanze", "avviso"].forEach((id) => $(id).classList.remove("nascosto"));
+  $("suggerimento-testo").textContent = touch
+    ? "Trascina per guardarti intorno, tocca il pavimento per spostarti"
+    : "Trascina per guardarti intorno, clicca sul pavimento per spostarti";
+  $("aiuto-tocca").textContent = touch ? "toccando" : "cliccando";
+  setTimeout(() => !suggerimentoVisto && $("suggerimento").classList.remove("nascosto"), 700);
+  window.__tour = { pronto: true, vista, vai: (nome) => vaiInStanza(dati.stanze.find((s) => s.nome === nome), true),
+    // per le prove: punta la vista su un punto preciso (coordinate di pianta)
+    guarda: (px, py, g, fov) => { const [yaw, pitch] = guardaVerso(px, py, g); Object.assign(vista, { px, py, yaw, pitch, fov: fov || vista.fov }); zoomato = !!fov; sporco = true; } };
+}
+
+// riflessi: la cottura rende tutto opaco, qui le superfici lucide tornano a riflettere la stanza.
+// [nome del pezzo, quanto riflette, come si somma al colore]
+const LUCIDI = [
+  [/^(WC|Bidet)/, 0.10, THREE.AddOperation],
+  [/^Lavabo/, 0.09, THREE.AddOperation],
+  [/^Doccia/, 0.10, THREE.AddOperation],
+  [/^Scaldasalviette/, 0.10, THREE.AddOperation],
+  [/^TV/, 0.20, THREE.MixOperation],
+];
+// la stanza si cattura una volta sola, dal punto indicato nel file della casa, dopo il caricamento
+let PUNTI_RIFLESSO = { Soggiorno: [1.9, 2.2], Camera: [1.9, 8.1], Bagno: [1.35, 5.3], Ingresso: [3.3, 5.4] };
+let BOX_STANZE = {};
+// riflesso proiettato sull'ingombro della stanza (box projection): il pavimento riflette i muri al posto giusto.
+// Dalla luce dell'ambiente si tiene solo il riflesso: la luce diffusa è già nella cottura.
+const CODICE_BOX = `
+varying vec3 vPosMondo;
+uniform vec3 boxMin; uniform vec3 boxMax; uniform vec3 probePos;
+vec3 boxProiettato( vec3 v ) {
+  vec3 t1 = ( boxMax - vPosMondo ) / v;
+  vec3 t2 = ( boxMin - vPosMondo ) / v;
+  vec3 tm = max( t1, t2 );
+  float t = min( min( tm.x, tm.y ), tm.z );
+  return normalize( vPosMondo + v * t - probePos );
+}`;
+function riflessoInStanza(mat, stanza) {
+  const [x0, y0, x1, y1] = BOX_STANZE[stanza], [px, py] = PUNTI_RIFLESSO[stanza], alto = dati.altezza_soffitto || 2.7;
+  const u = { boxMin: { value: new THREE.Vector3(x0, 0, -y1) }, boxMax: { value: new THREE.Vector3(x1, alto, -y0) },
+              probePos: { value: in3d(px, py, 1.3) } };
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vPosMondo;")
+      .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\n\tvPosMondo = worldPosition.xyz;");
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + CODICE_BOX)
+      .replace("#include <envmap_physical_pars_fragment>", THREE.ShaderChunk.envmap_physical_pars_fragment.replace(
+        "reflectVec = inverseTransformDirection( reflectVec, viewMatrix );",
+        "reflectVec = boxProiettato( inverseTransformDirection( reflectVec, viewMatrix ) );"))
+      .replace("#include <lights_fragment_maps>", THREE.ShaderChunk.lights_fragment_maps.replace(
+        "iblIrradiance += getIBLIrradiance( geometryNormal );", ""));
+  };
+  mat.customProgramCacheKey = () => "stanza-" + stanza;
+  mat.needsUpdate = true;
+}
+function aggiungiRiflessi(lista, metalli = [], fisici = []) {
+  if (dati.riflessi) {
+    PUNTI_RIFLESSO = Object.fromEntries(Object.entries(dati.riflessi).map(([k, v]) => [k, v.punto]));
+    BOX_STANZE = Object.fromEntries(Object.entries(dati.riflessi).map(([k, v]) => [k, v.box]));
+  }
+  const mappe = {}, sfocate = {}, pmrem = new THREE.PMREMGenerator(renderer);
+  const mappa = (nome) => {
+    if (mappe[nome]) return mappe[nome];
+    const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType });
+    const cc = new THREE.CubeCamera(0.05, 60, rt);
+    const [px, py] = PUNTI_RIFLESSO[nome];
+    cc.position.copy(in3d(px, py, 1.3));
+    scena.add(cc); cc.update(renderer, scena); scena.remove(cc);
+    return (mappe[nome] = rt.texture);
+  };
+  // per i metalli la stanza si prepara anche sfocata, così il satinato riflette morbido
+  const mappaSfocata = (nome) => sfocate[nome] || (sfocate[nome] = pmrem.fromCubemap(mappa(nome)).texture);
+  const stanzaPezzo = (o) => {
+    const c = new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3());
+    const st = stanzaDi(c.x, -c.z);
+    return PUNTI_RIFLESSO[st] ? st : "Soggiorno";
+  };
+  // prima i metalli (così la stanza catturata non li contiene ancora neri), poi le superfici lucide
+  const st = metalli.map(stanzaPezzo);
+  metalli.forEach((o) => { o.visible = false; });
+  st.forEach((s) => mappaSfocata(s));
+  metalli.forEach((o, i) => {
+    const t = o.userData.tinta || [0.8, 0.8, 0.8];
+    o.material = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(...t), metalness: 1,
+      roughness: o.userData.ruvido ?? 0.2, envMap: mappaSfocata(st[i]) });
+    o.visible = true;
+  });
+  for (const [o, quanto, modo] of lista) {
+    Object.assign(o.material, { envMap: mappa(stanzaPezzo(o)), reflectivity: quanto, combine: modo });
+    o.material.needsUpdate = true;
+  }
+  // superfici fisiche (gres, ceramica, laccati, intonaco): riflesso sfocato secondo la lucidità, sulla stanza
+  const stF = fisici.map(stanzaPezzo);
+  stF.forEach((s) => mappaSfocata(s));
+  fisici.forEach((o, i) => {
+    o.material.envMap = mappaSfocata(stF[i]);
+    if (BOX_STANZE[stF[i]]) riflessoInStanza(o.material, stF[i]);
+    else o.material.needsUpdate = true;
+  });
+  pmrem.dispose();
+}
+
+// specchio vero: un Reflector sulla faccia davanti (quella lontana dal muro)
+function faiSpecchio(o) {
+  const box = new THREE.Box3().setFromObject(o), dim = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  const assi = dim.x < dim.z ? ["x", "z"] : ["z", "x"];
+  const ray = new THREE.Raycaster();
+  let n = null;
+  for (const s of [1, -1]) {
+    const d = new THREE.Vector3(); d[assi[0]] = s;
+    ray.set(c.clone().addScaledVector(d, dim[assi[0]] / 2 + 0.01), d);
+    const hit = ray.intersectObjects(solidi, false)[0];
+    if (!hit || hit.distance > 0.3) { n = d; break; }
+  }
+  if (!n) return;
+  const largo = dim[assi[1]], alto = dim.y;
+  const q = Math.min(1, 900 / Math.max(innerWidth, innerHeight));
+  const r = new Reflector(new THREE.PlaneGeometry(largo, alto), {
+    clipBias: 0.003, color: 0xc9cdcd,
+    textureWidth: Math.round(innerWidth * renderer.getPixelRatio() * 0.6 * q * 1.6),
+    textureHeight: Math.round(innerHeight * renderer.getPixelRatio() * 0.6 * q * 1.6),
+  });
+  r.position.copy(c).addScaledVector(n, dim[assi[0]] / 2 + 0.002);
+  r.lookAt(r.position.clone().add(n));
+  scena.add(r);
+  o.visible = false;
+}
+
+// ---------- comandi
+let puntatori = new Map(), trascinato = false, inizio = null, distPinch = 0;
+const anello = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.19, 48).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0x6bbcae, transparent: true, opacity: 0, toneMapped: false, depthWrite: false }));
+anello.renderOrder = 3;
+scena.add(anello);
+const raggio = new THREE.Raycaster(), mouse = new THREE.Vector2();
+
+function colpo(e, oggetti) {
+  const r = canvas.getBoundingClientRect();
+  mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  raggio.setFromCamera(mouse, camera);
+  return raggio.intersectObjects(oggetti, false)[0];
+}
+
+let suggerimentoVisto = false;
+function nascondiSuggerimento() { suggerimentoVisto = true; $("suggerimento").classList.add("nascosto"); }
+
+canvas.addEventListener("pointerdown", (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  puntatori.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (puntatori.size === 1) { inizio = { x: e.clientX, y: e.clientY, t: performance.now() }; trascinato = false; vel.yaw = vel.pitch = 0; }
+  if (puntatori.size === 2) { const [a, b] = [...puntatori.values()]; distPinch = Math.hypot(a.x - b.x, a.y - b.y); trascinato = true; }
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!dati) return;
+  const prima = puntatori.get(e.pointerId);
+  if (!prima) {   // solo hover del mouse: anello sul pavimento
+    if (e.pointerType === "mouse" && !animazione) {
+      const h = colpo(e, pavimenti);
+      const ok = h && libero(h.point.x, -h.point.z);
+      anello.visible = !!h;
+      if (h) { anello.position.set(h.point.x, h.point.y + 0.008, h.point.z); anello.material.opacity = ok ? 0.85 : 0.25; }
+      sporco = true;
+    }
+    return;
+  }
+  if (puntatori.size === 2) {
+    puntatori.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const [a, b] = [...puntatori.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    vista.fov = THREE.MathUtils.clamp(vista.fov * (distPinch / d), fovBase() * 0.55, fovBase() * 1.15); distPinch = d; zoomato = true; sporco = true;
+    return;
+  }
+  const dx = e.clientX - prima.x, dy = e.clientY - prima.y;
+  puntatori.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!trascinato && Math.hypot(e.clientX - inizio.x, e.clientY - inizio.y) > 6) { trascinato = true; canvas.classList.add("trascina"); nascondiSuggerimento(); anello.visible = false; }
+  if (trascinato) {
+    const k = 0.0042 * (vista.fov / 68);
+    vista.yaw += dx * k; vista.pitch = THREE.MathUtils.clamp(vista.pitch + dy * k, -1.2, 1.2);
+    vel.yaw = dx * k * 0.5; vel.pitch = dy * k * 0.5; animazione = null; sporco = true;
+  }
+});
+function fine(e) {
+  if (!puntatori.has(e.pointerId)) return;
+  const unico = puntatori.size === 1;
+  puntatori.delete(e.pointerId);
+  canvas.classList.remove("trascina");
+  if (!unico) return;
+  if (!trascinato && performance.now() - inizio.t < 500 && dati) {
+    // tocco: si va dove si è toccato (sul pavimento, o sotto il punto toccato)
+    const h = colpo(e, solidi);
+    if (h) {
+      const v = liberoVicino(h.point.x, -h.point.z);
+      window.__tour.tocco = { oggetto: h.object.name, punto: [+h.point.x.toFixed(2), +(-h.point.z).toFixed(2)], libero: v };
+      if (v) {
+        const [fx, fy] = finoA(v[0], v[1]);
+        if (Math.hypot(fx - vista.px, fy - vista.py) > 0.08) {
+          anello.visible = true; anello.material.opacity = 0.85;
+          anello.position.copy(in3d(fx, fy, (h.object.name === "Pavimento bagno" ? 0.004 : 0) + 0.008));
+          vaiA(fx, fy); nascondiSuggerimento();
+        }
+      }
+    }
+  }
+  if (movimentoRidotto) vel.yaw = vel.pitch = 0;
+}
+canvas.addEventListener("pointerup", fine);
+canvas.addEventListener("pointercancel", fine);
+canvas.addEventListener("pointerleave", () => { if (!puntatori.size) { anello.visible = false; sporco = true; } });
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); vista.fov = THREE.MathUtils.clamp(vista.fov + e.deltaY * 0.03, fovBase() * 0.55, fovBase() * 1.15); zoomato = true; sporco = true; }, { passive: false });
+
+const tasti = new Set();
+addEventListener("keydown", (e) => {
+  if (e.target.closest && e.target.closest("button") && (e.key === " " || e.key === "Enter")) return;
+  const k = e.key.toLowerCase();
+  if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) { tasti.add(k); e.preventDefault(); nascondiSuggerimento(); }
+  if (k === "escape") chiudiAiuto();
+});
+addEventListener("keyup", (e) => tasti.delete(e.key.toLowerCase()));
+addEventListener("blur", () => tasti.clear());
+
+function cammina(dt) {
+  let av = 0, la = 0;
+  if (tasti.has("w") || tasti.has("arrowup")) av += 1;
+  if (tasti.has("s") || tasti.has("arrowdown")) av -= 1;
+  if (tasti.has("d")) la -= 1;
+  if (tasti.has("a")) la += 1;
+  if (tasti.has("arrowleft")) vista.yaw += 1.6 * dt;
+  if (tasti.has("arrowright")) vista.yaw -= 1.6 * dt;
+  if (!av && !la && !tasti.has("arrowleft") && !tasti.has("arrowright")) return false;
+  animazione = null;
+  const v = 1.4 * dt, c = Math.cos(vista.yaw), s = Math.sin(vista.yaw);
+  const dx = (c * av - s * la) * v, dy = (s * av + c * la) * v, ig = intorno();
+  if (libero(vista.px + dx, vista.py + dy, ig)) { vista.px += dx; vista.py += dy; }
+  else if (libero(vista.px + dx, vista.py, ig)) vista.px += dx;
+  else if (libero(vista.px, vista.py + dy, ig)) vista.py += dy;
+  segnaStanza();
+  return true;
+}
+
+// aiuto e schermo intero
+const chiudiAiuto = () => { $("aiuto").classList.add("nascosto"); $("btn-aiuto").setAttribute("aria-expanded", "false"); };
+$("btn-aiuto").addEventListener("click", () => {
+  const aperto = $("aiuto").classList.toggle("nascosto") === false;
+  $("btn-aiuto").setAttribute("aria-expanded", String(aperto));
+  if (aperto) nascondiSuggerimento();
+});
+$("btn-schermo").addEventListener("click", () => {
+  if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.();
+});
+document.addEventListener("fullscreenchange", () => {
+  $("btn-schermo").querySelector("i").className = document.fullscreenElement ? "ph ph-corners-in" : "ph ph-corners-out";
+  $("btn-schermo").setAttribute("aria-label", document.fullscreenElement ? "Esci da schermo intero" : "Schermo intero");
+});
+if (!document.fullscreenEnabled) $("btn-schermo").hidden = true;
+
+// ---------- ciclo
+function ridimensiona() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  if (catena) { catena.setPixelRatio(renderer.getPixelRatio()); catena.setSize(w, h); }
+  camera.aspect = w / h;
+  if (!zoomato) vista.fov = fovBase();
+  camera.fov = vista.fov;
+  camera.updateProjectionMatrix();
+  bordiStanze();
+  sporco = true;
+}
+function bordiStanze() {
+  const n = $("stanze"), extra = n.scrollWidth - n.clientWidth;
+  n.classList.toggle("scorre-sx", extra > 2 && n.scrollLeft > 2);
+  n.classList.toggle("scorre-dx", extra > 2 && n.scrollLeft < extra - 2);
+}
+$("stanze").addEventListener("scroll", bordiStanze, { passive: true });
+addEventListener("resize", ridimensiona);
+ridimensiona();
+
+let prima = performance.now();
+// telefoni lenti: se mentre ci si muove i fotogrammi arrivano più radi di 25 al secondo, le ombre di contatto si spengono
+let ultimoDisegno = 0, disegnoDiFila = false, fotogrammiLenti = 0;
+// fuori, sul balcone, c'è molta più luce: l'esposizione scende piano quando si esce e risale quando si rientra
+let esposizioneBase = 0.6, quantoFuori = 0;
+const ESPOSIZIONE_FUORI = -2.4;
+renderer.setAnimationLoop((ora) => {
+  const dt = Math.min(0.05, (ora - prima) / 1000); prima = ora;
+  if (!dati) return;
+  if (animazione) { animazione(ora); sporco = true; }
+  if (cammina(dt)) sporco = true;
+  if (!puntatori.size && !movimentoRidotto && (Math.abs(vel.yaw) > 1e-4 || Math.abs(vel.pitch) > 1e-4)) {
+    vista.yaw += vel.yaw; vista.pitch = THREE.MathUtils.clamp(vista.pitch + vel.pitch, -1.2, 1.2);
+    vel.yaw *= 0.82; vel.pitch *= 0.82; sporco = true;
+  }
+  if (!animazione && anello.visible && !puntatori.size && anello.material.opacity > 0 && touch) {
+    anello.material.opacity = Math.max(0, anello.material.opacity - dt * 1.5); sporco = true;
+  }
+  if (passoColori && dati) {
+    const meta = vista.py < -0.20 ? 1 : 0;
+    if (Math.abs(meta - quantoFuori) > 0.002) {
+      quantoFuori += (meta - quantoFuori) * Math.min(1, dt * 2.5);
+      passoColori.uniforms.esposizione.value = Math.pow(2, esposizioneBase + quantoFuori * ESPOSIZIONE_FUORI);
+      // il bagliore guarda la luce prima dell'esposizione: fuori la soglia sale insieme alla luce, o tutto si vela
+      if (passoBagliore) passoBagliore.threshold = 2.2 * Math.pow(2, -quantoFuori * ESPOSIZIONE_FUORI);
+      if (cieloMat) cieloMat.color.setScalar(Math.pow(2, -quantoFuori * ESPOSIZIONE_FUORI));   // il cielo resta chiaro
+      sporco = true;
+    }
+  }
+  if (!sporco) { disegnoDiFila = false; return; }
+  if (passoAO && passoAO.enabled && disegnoDiFila) {
+    fotogrammiLenti = ora - ultimoDisegno > 40 ? fotogrammiLenti + 1 : Math.max(0, fotogrammiLenti - 2);
+    if (fotogrammiLenti > 24) { passoAO.enabled = false; console.info("ombre di contatto spente: dispositivo lento"); }
+  }
+  ultimoDisegno = ora; disegnoDiFila = true;
+  aggiornaCamera();
+  if (catena) catena.render();
+  else renderer.render(scena, camera);
+  sporco = false;
+});
+
+// passaggio alla versione a 360 gradi: si parte dal punto fisso della stanza in cui si è
+const PUNTO_360 = { Soggiorno: "soggiorno", Cucina: "soggiorno", Ingresso: "ingresso", Bagno: "bagno", Camera: "camera", Balcone: "balcone" };
+$("btn-360").addEventListener("click", (e) => {
+  const attiva = document.querySelector('.stanza[aria-pressed="true"]');
+  const punto = attiva && PUNTO_360[attiva.dataset.nome];
+  if (punto) { e.preventDefault(); location.href = `tour360.html?punto=${punto}`; }
+});
+
+carica().catch((err) => {
+  console.error(err);
+  $("carica-stato").textContent = "Qualcosa non ha funzionato";
+  $("errore").style.display = "block";
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+ "nome": "Appartamento Katia",
+ "nota": "Punti fissi della visita a 360 gradi. pos = posizione della macchina in metri (coordinate della casa, z = altezza degli occhi). Ogni foto e' un'equirettangolare di Blender 2:1 con il centro dell'immagine che guarda verso +y (nord, verso la camera da letto). vicini = punti raggiungibili da qui con un tocco.",
+ "partenza": "soggiorno",
+ "punti": [
+  {"id": "soggiorno", "nome": "Soggiorno", "pos": [1.90, 2.90, 1.50], "file": "katia-soggiorno.jpg", "vicini": ["finestra", "ingresso", "balcone"]},
+  {"id": "finestra", "nome": "Soggiorno, vicino alla portafinestra", "pos": [2.60, 0.85, 1.50], "file": "katia-finestra.jpg", "vicini": ["soggiorno", "balcone", "ingresso"]},
+  {"id": "balcone", "nome": "Balcone", "pos": [2.70, -1.05, 1.50], "file": "katia-balcone.jpg", "vicini": ["finestra", "soggiorno"]},
+  {"id": "ingresso", "nome": "Ingresso", "pos": [3.30, 5.30, 1.50], "file": "katia-ingresso.jpg", "vicini": ["soggiorno", "bagno", "camera"]},
+  {"id": "bagno", "nome": "Bagno", "pos": [1.55, 5.42, 1.50], "file": "katia-bagno.jpg", "vicini": ["ingresso"]},
+  {"id": "camera", "nome": "Camera", "pos": [2.45, 7.00, 1.50], "file": "katia-camera.jpg", "vicini": ["ingresso", "camera-finestra"]},
+  {"id": "camera-finestra", "nome": "Camera, vicino alla portafinestra", "pos": [2.45, 9.30, 1.50], "file": "katia-camera-finestra.jpg", "vicini": ["camera"]}
+ ]
+}

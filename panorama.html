@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vista a 360 gradi</title>
+<meta name="description" content="Vista a 360 gradi della stanza, calcolata alla qualità piena.">
+<meta name="theme-color" content="#121514">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23121514'/%3E%3Cpath d='M8 15 16 8l8 7v9H8z' fill='%236bbcae'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+  :root {
+    --sfondo: #121514; --vetro: rgba(17, 20, 19, 0.56); --vetro-forte: rgba(17, 20, 19, 0.78);
+    --bordo: rgba(255, 255, 255, 0.13); --luce-bordo: rgba(255, 255, 255, 0.10);
+    --testo: #f2f1ed; --testo-2: rgba(242, 241, 237, 0.70); --accento: #6bbcae;
+    --ombra: 0 14px 40px rgba(6, 12, 10, 0.32), 0 2px 8px rgba(6, 12, 10, 0.22);
+    --molla: cubic-bezier(0.22, 1, 0.36, 1); --gutter: max(16px, env(safe-area-inset-left));
+    --display: "Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif; --ui: "Hanken Grotesk", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--sfondo); color: var(--testo); font-family: var(--ui); -webkit-font-smoothing: antialiased; overflow: hidden; overscroll-behavior: none; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; outline: none; }
+  canvas.trascina { cursor: grabbing; }
+  button { font: inherit; color: inherit; border: 0; background: none; }
+  button:focus-visible { outline: 2px solid var(--accento); outline-offset: 3px; }
+  .vetro { background: var(--vetro); border: 1px solid var(--bordo); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); box-shadow: inset 0 1px 0 var(--luce-bordo), var(--ombra); }
+  @media (prefers-reduced-transparency: reduce) { .vetro { background: var(--vetro-forte); backdrop-filter: none; -webkit-backdrop-filter: none; } }
+  .ui { position: fixed; z-index: 2; transition: opacity 0.5s var(--molla), transform 0.5s var(--molla); }
+  .nascosto { opacity: 0; pointer-events: none; }
+  #intestazione { top: max(16px, env(safe-area-inset-top)); left: var(--gutter); right: var(--gutter); display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none; }
+  #nome { pointer-events: auto; padding: 9px 16px 10px; border-radius: 999px; font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; }
+  #nome span { color: var(--testo-2); font-family: var(--ui); font-weight: 500; margin-left: 8px; }
+  .tondo { width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center; font-size: 19px; cursor: pointer; pointer-events: auto; transition: transform 0.25s var(--molla), background-color 0.25s var(--molla); }
+  .tondo:hover { background: rgba(40, 46, 44, 0.72); }
+  .tondo:active { transform: scale(0.94); }
+  #suggerimento { left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%); padding: 10px 16px; border-radius: 999px; font-size: 14px; display: flex; align-items: center; gap: 10px; white-space: nowrap; pointer-events: none; }
+  #suggerimento i { font-size: 18px; color: var(--accento); }
+  #suggerimento.nascosto { transform: translate(-50%, 8px); }
+  #avviso { left: var(--gutter); bottom: max(24px, env(safe-area-inset-bottom)); font-size: 11.5px; color: rgba(242, 241, 237, 0.62); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55); max-width: 210px; line-height: 1.4; }
+  #carica { position: fixed; inset: 0; z-index: 3; display: grid; place-items: center; padding: 24px; background: radial-gradient(120% 90% at 20% 10%, #1d2422 0%, transparent 60%), var(--sfondo); transition: opacity 0.7s var(--molla); }
+  #carica.finito { opacity: 0; pointer-events: none; }
+  .carica-testo { width: min(340px, 100%); }
+  #carica h1 { font-family: var(--display); font-weight: 600; font-size: clamp(30px, 6vw, 42px); letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 10px; }
+  #carica p { color: var(--testo-2); font-size: 15px; display: flex; justify-content: space-between; }
+  #barra { height: 2px; margin-top: 22px; background: var(--accento); transform-origin: left; transform: scaleX(0); transition: transform 0.35s var(--molla); border-radius: 2px; }
+  #errore { display: none; margin-top: 18px; color: #f0b4a8; font-size: 14.5px; line-height: 1.55; }
+  @media (max-width: 640px) { #nome span { display: none; } #avviso { bottom: calc(max(24px, env(safe-area-inset-bottom)) + 52px); } #suggerimento { white-space: normal; width: calc(100vw - 2 * var(--gutter)); max-width: 340px; } }
+  @media (prefers-reduced-motion: reduce) { .ui, #carica, #barra, .tondo { transition-duration: 0.01ms !important; } }
+</style>
+</head>
+<body>
+<canvas id="scena" tabindex="0" aria-label="Vista a 360 gradi: trascina per guardarti intorno"></canvas>
+<div id="carica" role="status" aria-live="polite">
+  <div class="carica-testo">
+    <h1 id="carica-nome">Vista a 360 gradi</h1>
+    <p><span>Carico l'immagine</span><span id="pct">0%</span></p>
+    <div id="barra"></div>
+    <div id="errore">Non riesco a caricare la vista. Ricarica la pagina o riprova più tardi.</div>
+  </div>
+</div>
+<header id="intestazione" class="ui nascosto">
+  <div id="nome" class="vetro"></div>
+  <button id="btn-schermo" class="tondo vetro" aria-label="Schermo intero"><i class="ph ph-corners-out"></i></button>
+</header>
+<div id="suggerimento" class="ui vetro nascosto"><i class="ph ph-hand-grabbing"></i><span id="suggerimento-testo">Trascina per guardarti intorno</span></div>
+<p id="avviso" class="ui nascosto">Ricostruzione 3D indicativa: arredi e misure possono differire.</p>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+const $ = (id) => document.getElementById(id);
+const par = new URLSearchParams(location.search);
+const PANO = (par.get("pano") || "katia-bagno").replace(/[^a-z0-9-]/gi, "");
+const TITOLO = par.get("titolo") || "Appartamento Katia";
+const STANZA = par.get("stanza") || "Bagno";
+const ridotto = matchMedia("(prefers-reduced-motion: reduce)").matches;
+window.__pano = { pronto: false };
+
+const canvas = $("scena");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;          // l'immagine ha già la resa di Blender
+const scena = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 10);
+// direzione: yaw 0 = centro dell'immagine (nord, verso il lavabo); a sinistra il muro di fondo con i sanitari
+const vista = { yaw: Number(par.get("yaw") ?? -80) * Math.PI / 180, pitch: -0.12, fov: innerWidth / innerHeight < 0.8 ? 90 : 75 };
+const vel = { yaw: 0, pitch: 0 };
+let sporco = true;
+
+function aggiorna() {
+  const c = Math.cos(vista.pitch);
+  camera.lookAt(c * Math.cos(vista.yaw), Math.sin(vista.pitch), c * Math.sin(vista.yaw));
+  if (camera.fov !== vista.fov) { camera.fov = vista.fov; camera.updateProjectionMatrix(); }
+}
+
+async function carica() {
+  $("carica-nome").textContent = TITOLO;
+  $("nome").innerHTML = ""; $("nome").append(TITOLO);
+  const s = document.createElement("span"); s.textContent = STANZA; $("nome").append(s);
+  document.title = `${TITOLO}, ${STANZA} a 360 gradi`;
+  const r = await fetch(`panorami/${PANO}.jpg`);
+  if (!r.ok) throw new Error("immagine mancante");
+  const tot = Number(r.headers.get("content-length")) || 0, pezzi = [];
+  let letti = 0;
+  const lettore = r.body.getReader();
+  for (;;) {
+    const { done, value } = await lettore.read();
+    if (done) break;
+    pezzi.push(value); letti += value.length;
+    if (tot) { const p = letti / tot; $("barra").style.transform = `scaleX(${p})`; $("pct").textContent = Math.round(p * 100) + "%"; }
+  }
+  const bmp = await createImageBitmap(new Blob(pezzi, { type: "image/jpeg" }), { imageOrientation: "flipY" });
+  const tex = new THREE.Texture(bmp);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = false;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.needsUpdate = true;
+  scena.background = tex;
+  aggiorna();
+  renderer.render(scena, camera);
+  $("carica").classList.add("finito");
+  ["intestazione", "avviso"].forEach((id) => $(id).classList.remove("nascosto"));
+  setTimeout(() => !visto && $("suggerimento").classList.remove("nascosto"), 700);
+  window.__pano = { pronto: true, vista, guarda: (y, p, f) => { Object.assign(vista, { yaw: y * Math.PI / 180, pitch: p * Math.PI / 180, fov: f || vista.fov }); sporco = true; } };
+}
+
+// comandi: trascina (afferri la stanza), rotella e due dita per lo zoom, frecce
+let punti = new Map(), distPinch = 0, visto = false;
+const nascondi = () => { visto = true; $("suggerimento").classList.add("nascosto"); };
+canvas.addEventListener("pointerdown", (e) => {
+  canvas.setPointerCapture(e.pointerId); punti.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  vel.yaw = vel.pitch = 0; canvas.classList.add("trascina");
+  if (punti.size === 2) { const [a, b] = [...punti.values()]; distPinch = Math.hypot(a.x - b.x, a.y - b.y); }
+});
+canvas.addEventListener("pointermove", (e) => {
+  const p = punti.get(e.pointerId); if (!p) return;
+  if (punti.size === 2) {
+    punti.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const [a, b] = [...punti.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    vista.fov = THREE.MathUtils.clamp(vista.fov * distPinch / d, 35, 100); distPinch = d; sporco = true; return;
+  }
+  const dx = e.clientX - p.x, dy = e.clientY - p.y, k = 0.0035 * vista.fov / 75;
+  punti.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  vista.yaw -= dx * k; vista.pitch = THREE.MathUtils.clamp(vista.pitch + dy * k, -1.45, 1.45);
+  vel.yaw = -dx * k * 0.5; vel.pitch = dy * k * 0.5; sporco = true;
+  if (Math.abs(dx) + Math.abs(dy) > 3) nascondi();
+});
+const fine = (e) => { punti.delete(e.pointerId); if (!punti.size) canvas.classList.remove("trascina"); if (ridotto) vel.yaw = vel.pitch = 0; };
+canvas.addEventListener("pointerup", fine);
+canvas.addEventListener("pointercancel", fine);
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); vista.fov = THREE.MathUtils.clamp(vista.fov + e.deltaY * 0.03, 35, 100); sporco = true; nascondi(); }, { passive: false });
+const tasti = new Set();
+addEventListener("keydown", (e) => { if (e.key.startsWith("Arrow")) { tasti.add(e.key); e.preventDefault(); nascondi(); } });
+addEventListener("keyup", (e) => tasti.delete(e.key));
+$("btn-schermo").addEventListener("click", () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.());
+if (!document.fullscreenEnabled) $("btn-schermo").hidden = true;
+
+function ridimensiona() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); sporco = true;
+}
+addEventListener("resize", ridimensiona); ridimensiona();
+let prima = performance.now();
+renderer.setAnimationLoop((ora) => {
+  const dt = Math.min(0.05, (ora - prima) / 1000); prima = ora;
+  if (!scena.background) return;
+  if (tasti.has("ArrowLeft")) { vista.yaw -= 1.2 * dt; sporco = true; }
+  if (tasti.has("ArrowRight")) { vista.yaw += 1.2 * dt; sporco = true; }
+  if (tasti.has("ArrowUp")) { vista.pitch = Math.min(1.45, vista.pitch + dt); sporco = true; }
+  if (tasti.has("ArrowDown")) { vista.pitch = Math.max(-1.45, vista.pitch - dt); sporco = true; }
+  if (!punti.size && (Math.abs(vel.yaw) > 1e-4 || Math.abs(vel.pitch) > 1e-4)) {
+    vista.yaw += vel.yaw; vista.pitch = THREE.MathUtils.clamp(vista.pitch + vel.pitch, -1.45, 1.45);
+    vel.yaw *= 0.86; vel.pitch *= 0.86; sporco = true;
+  }
+  if (!sporco) return;
+  aggiorna(); renderer.render(scena, camera); sporco = false;
+});
+carica().catch((e) => { console.error(e); $("errore").style.display = "block"; });
+</script>
+</body>
+</html>

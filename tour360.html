@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visita a 360 gradi</title>
+<meta name="description" content="Visita a punti fissi: foto a 360 gradi calcolate alla qualità piena, da un punto all'altro con un tocco.">
+<meta name="theme-color" content="#121514">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23121514'/%3E%3Cpath d='M8 15 16 8l8 7v9H8z' fill='%236bbcae'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+  :root {
+    --sfondo: #121514; --vetro: rgba(17, 20, 19, 0.56); --vetro-forte: rgba(17, 20, 19, 0.78);
+    --bordo: rgba(255, 255, 255, 0.13); --luce-bordo: rgba(255, 255, 255, 0.10);
+    --testo: #f2f1ed; --testo-2: rgba(242, 241, 237, 0.70); --accento: #6bbcae; --accento-scuro: #15302b;
+    --ombra: 0 14px 40px rgba(6, 12, 10, 0.32), 0 2px 8px rgba(6, 12, 10, 0.22);
+    --molla: cubic-bezier(0.22, 1, 0.36, 1);
+    --gutter: max(16px, env(safe-area-inset-left)); --basso: max(18px, env(safe-area-inset-bottom));
+    --display: "Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif; --ui: "Hanken Grotesk", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--sfondo); color: var(--testo); font-family: var(--ui); -webkit-font-smoothing: antialiased; overflow: hidden; overscroll-behavior: none; }
+  canvas#scena { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; outline: none; }
+  canvas#scena.trascina { cursor: grabbing; }
+  canvas#scena.su-anello { cursor: pointer; }
+  button { font: inherit; color: inherit; border: 0; background: none; padding: 0; }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--accento); outline-offset: 3px; }
+
+  /* vetro scuro: approssimazione web del materiale frosted, con fondo pieno se la trasparenza è ridotta */
+  .vetro { background: var(--vetro); border: 1px solid var(--bordo); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); box-shadow: inset 0 1px 0 var(--luce-bordo), var(--ombra); }
+  @media (prefers-reduced-transparency: reduce) { .vetro { background: var(--vetro-forte); backdrop-filter: none; -webkit-backdrop-filter: none; } }
+  .ui { position: fixed; z-index: 2; transition: opacity 0.5s var(--molla), transform 0.5s var(--molla); }
+  .nascosto { opacity: 0; pointer-events: none; }
+
+  /* tutto ciò che si tocca: velo chiaro al passaggio (solo opacità), piccola pressione al tocco */
+  .tasto { position: relative; isolation: isolate; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform 0.25s var(--molla); }
+  .tasto::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: rgba(255, 255, 255, 0.09); opacity: 0; transition: opacity 0.25s var(--molla); pointer-events: none; }
+  @media (hover: hover) { .tasto:hover::before { opacity: 1; } }
+  .tasto:focus-visible::before { opacity: 1; }
+  .tasto:active { transform: scale(0.95); }
+
+  /* in alto: nome del punto, versione camminabile, schermo intero */
+  #intestazione { top: max(16px, env(safe-area-inset-top)); left: var(--gutter); right: var(--gutter); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; pointer-events: none; }
+  #nome { pointer-events: auto; min-width: 0; min-height: 42px; padding: 10px 17px 11px; border-radius: 21px; display: flex; align-items: center; gap: 10px; }
+  #nome-punto { font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #nome-casa { color: var(--testo-2); font-size: 14px; font-weight: 500; white-space: nowrap; }
+  .comandi { display: flex; gap: 8px; pointer-events: auto; flex: none; }
+  .tondo { width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center; font-size: 19px; }
+  .azione { height: 42px; padding: 0 18px 0 14px; border-radius: 999px; display: inline-flex; align-items: center; gap: 9px; font-size: 14.5px; font-weight: 500; color: var(--testo); text-decoration: none; white-space: nowrap; }
+  .azione i { font-size: 20px; color: var(--accento); }
+
+  /* in basso: i punti della visita */
+  #punti { left: 50%; bottom: var(--basso); transform: translateX(-50%); display: flex; gap: 4px; padding: 5px; border-radius: 999px; max-width: calc(100vw - 2 * var(--gutter)); overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  #punti.nascosto { transform: translate(-50%, 8px); }
+  #punti::-webkit-scrollbar { display: none; }
+  #punti.scorre-dx { -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent); mask-image: linear-gradient(90deg, #000 82%, transparent); }
+  #punti.scorre-sx { -webkit-mask-image: linear-gradient(270deg, #000 82%, transparent); mask-image: linear-gradient(270deg, #000 82%, transparent); }
+  #punti.scorre-sx.scorre-dx { -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent); }
+  .punto { flex: none; scroll-snap-align: center; padding: 10px 17px; border-radius: 999px; font-size: 14.5px; font-weight: 500; color: var(--testo-2); white-space: nowrap; overflow: hidden; }
+  @media (hover: hover) { .punto:hover { color: var(--testo); } }
+  .punto[aria-current] { color: var(--accento-scuro); background: var(--accento); }
+  .punto[aria-current]::before { background: rgba(255, 255, 255, 0.18); }
+
+  /* avanzamento del download, sul pulsante e sulla pillola dell'anello */
+  .avanza { position: absolute; left: 14px; right: 14px; bottom: 4px; height: 2px; border-radius: 2px; overflow: hidden; opacity: 0; transition: opacity 0.3s var(--molla); pointer-events: none; }
+  .avanza::after { content: ""; position: absolute; inset: 0; background: var(--accento); border-radius: inherit; transform-origin: left; transform: scaleX(var(--p, 0)); transition: transform 0.3s var(--molla); }
+  .carica .avanza { opacity: 1; }
+  .indefinito .avanza::after { right: auto; width: 35%; transform: none; animation: scorre 1.3s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+  @keyframes scorre { from { transform: translateX(-60%); } to { transform: translateX(245%); } }
+
+  /* pillole con il nome sopra gli anelli */
+  #etichette { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+  .etichetta { position: absolute; left: 0; top: 0; will-change: transform; }
+  .etichetta button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px 9px 12px; border-radius: 999px; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden;
+    opacity: 0; transform: translateY(6px) scale(0.96); transform-origin: 50% 100%; pointer-events: none; transition: opacity 0.28s var(--molla), transform 0.28s var(--molla); }
+  .etichetta.vista button { opacity: 1; transform: none; pointer-events: auto; }
+  .etichetta.vista button:active { transform: scale(0.95); }
+  .etichetta i { font-size: 16px; color: var(--accento); }
+  .etichetta .pct { display: none; color: var(--testo-2); font-variant-numeric: tabular-nums; }
+  .etichetta.carica .pct { display: inline; }
+
+  /* suggerimento iniziale e avviso */
+  #suggerimento { left: 50%; top: calc(max(16px, env(safe-area-inset-top)) + 56px); transform: translateX(-50%); padding: 10px 16px; border-radius: 999px; font-size: 14px; display: flex; align-items: center; gap: 10px; white-space: nowrap; pointer-events: none; }
+  #suggerimento i { font-size: 18px; color: var(--accento); }
+  #suggerimento.nascosto { transform: translate(-50%, -8px); }
+  #avviso { left: var(--gutter); bottom: calc(var(--basso) + 4px); font-size: 11.5px; color: rgba(242, 241, 237, 0.62); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55); max-width: 210px; line-height: 1.4; pointer-events: none; }
+  #avviso.sopra { bottom: calc(var(--basso) + 66px); }
+
+  /* caricamento */
+  #carica { position: fixed; inset: 0; z-index: 3; display: grid; place-items: center; padding: 24px;
+    background: radial-gradient(120% 90% at 20% 10%, #1d2422 0%, transparent 60%), radial-gradient(90% 80% at 85% 90%, #1a2321 0%, transparent 55%), var(--sfondo); transition: opacity 0.7s var(--molla); }
+  #carica::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  #carica.finito { opacity: 0; pointer-events: none; }
+  .carica-testo { width: min(340px, 100%); }
+  #carica h1 { font-family: var(--display); font-weight: 600; font-size: clamp(30px, 6vw, 42px); letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 10px; }
+  #carica p { color: var(--testo-2); font-size: 15px; line-height: 1.6; display: flex; justify-content: space-between; gap: 12px; }
+  #carica-pct { font-variant-numeric: tabular-nums; }
+  #binario { position: relative; height: 2px; margin-top: 22px; overflow: hidden; border-radius: 2px; }
+  #barra { position: absolute; inset: 0; background: var(--accento); transform-origin: left; transform: scaleX(0); transition: transform 0.35s var(--molla); border-radius: 2px; }
+  #binario.indefinito #barra { right: auto; width: 35%; transform: none; animation: scorre 1.3s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+  #errore { display: none; margin-top: 18px; color: #f0b4a8; font-size: 14.5px; line-height: 1.55; }
+
+  @media (max-width: 640px) {
+    #nome { padding: 10px 15px 11px; }
+    #nome-casa { display: none; }
+    #nome-punto { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .azione { width: 42px; padding: 0; justify-content: center; }
+    .azione span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    #avviso, #avviso.sopra { bottom: calc(var(--basso) + 66px); max-width: 180px; }
+    #suggerimento { top: calc(max(16px, env(safe-area-inset-top)) + 74px); white-space: normal; width: calc(100vw - 2 * var(--gutter)); max-width: 360px; justify-content: center; text-align: left; }
+    .punto { padding: 10px 14px; font-size: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ui, .tasto, .tasto::before, .etichetta button, .avanza, .avanza::after, #barra, #carica { transition-duration: 0.01ms !important; }
+    .indefinito .avanza::after, #binario.indefinito #barra { animation: none; width: 100%; opacity: 0.5; }
+  }
+</style>
+</head>
+<body>
+<canvas id="scena" tabindex="0" aria-label="Vista a 360 gradi: trascina per guardarti intorno, tocca un cerchio sul pavimento per spostarti"></canvas>
+<div id="etichette" aria-hidden="true"></div>
+
+<div id="carica" role="status" aria-live="polite">
+  <div class="carica-testo">
+    <h1 id="carica-nome">Visita a 360 gradi</h1>
+    <p><span id="carica-stato">Carico la vista</span><span id="carica-pct">0%</span></p>
+    <div id="binario"><div id="barra"></div></div>
+    <div id="errore">Non riesco a caricare la visita. Ricarica la pagina o riprova più tardi.</div>
+  </div>
+</div>
+
+<header id="intestazione" class="ui nascosto">
+  <div id="nome" class="vetro" aria-live="polite"><span id="nome-punto"></span><span id="nome-casa"></span></div>
+  <div class="comandi">
+    <a id="btn-cammina" class="azione vetro tasto" href="index.html?casa=katia" title="Passa alla visita in cui cammini per la casa">
+      <i class="ph ph-person-simple-walk" aria-hidden="true"></i><span>Cammina liberamente</span>
+    </a>
+    <button id="btn-schermo" class="tondo vetro tasto" type="button" aria-label="Schermo intero"><i class="ph ph-corners-out" aria-hidden="true"></i></button>
+  </div>
+</header>
+
+<div id="suggerimento" class="ui vetro nascosto"><i class="ph ph-hand-grabbing" aria-hidden="true"></i><span id="suggerimento-testo"></span></div>
+<nav id="punti" class="ui vetro nascosto" aria-label="Punti della visita"></nav>
+<p id="avviso" class="ui nascosto">Ricostruzione 3D indicativa: arredi e misure possono differire.</p>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+const $ = (id) => document.getElementById(id);
+const par = new URLSearchParams(location.search);
+const ridotto = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const touch = matchMedia("(pointer: coarse)").matches;
+const pulito = (s) => { const v = String(s ?? "").replace(/[^a-z0-9._-]/gi, ""); return v.startsWith(".") ? "" : v; };
+const FILE_PUNTI = /\.json$/i.test(pulito(par.get("punti"))) ? pulito(par.get("punti")) : "katia-punti.json";
+const limita = THREE.MathUtils.clamp, rad = THREE.MathUtils.degToRad, gradi = THREE.MathUtils.radToDeg;
+const LENTO = limita(Number(par.get("lento")) || 1, 1, 20);
+const T = { pronto: false };
+window.__tour360 = T;
+
+// ---------- renderer
+const canvas = $("scena");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;          // le foto hanno già la resa dei colori di Blender
+renderer.setClearColor(0x121514);
+const scena = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 60);
+
+// ---------- coordinate
+// Casa: x verso est, y verso nord, z in alto, in metri. Le foto di Blender hanno il centro verso nord e l'est
+// a destra del centro (verificato sul bagno: lavabo a sinistra del centro; porta, ingresso e doccia a destra).
+// In Three.js il centro di un'equirettangolare è +X e il quarto destro è +Z: nord -> +X, est -> +Z, alto -> +Y.
+const in3d = (x, y, z) => new THREE.Vector3(y, z, x);
+// yaw = direzione della bussola (0 nord, 90 est), pitch positivo verso l'alto
+const vista = { yaw: 0, pitch: -0.2, fov: 75 };
+const vel = { yaw: 0, pitch: 0 };
+const fovBase = () => (innerWidth / innerHeight < 0.8 ? 90 : 75);
+let zoomato = false, sporco = true;
+const _guardo = new THREE.Vector3();
+function aggiornaCamera() {
+  const c = Math.cos(vista.pitch);
+  camera.lookAt(_guardo.set(c * Math.cos(vista.yaw), Math.sin(vista.pitch), c * Math.sin(vista.yaw)).add(camera.position));
+  if (camera.fov !== vista.fov) { camera.fov = vista.fov; camera.updateProjectionMatrix(); }
+  camera.updateMatrixWorld();
+}
+const rotta = (a, b) => Math.atan2(b.pos[0] - a.pos[0], b.pos[1] - a.pos[1]);   // da a verso b, sulla bussola
+
+// ---------- foto sferiche: ogni foto sta su una sfera centrata nel suo punto. Da fermi la camera è nel centro
+// e la vista è esatta; durante il salto la camera avanza dentro la sfera di partenza (la stanza si allarga verso
+// il punto scelto) mentre arriva la sfera nuova, centrata dove la camera si ferma.
+const RAGGIO = 4;
+const geoSfera = new THREE.SphereGeometry(RAGGIO, 96, 48);
+function nuovaSfera() {
+  const m = new THREE.ShaderMaterial({
+    uniforms: { mappa: { value: null }, centro: { value: new THREE.Vector3() }, opacita: { value: 1 } },
+    vertexShader: `uniform vec3 centro; varying vec3 vDir;
+      void main() { vec4 p = modelMatrix * vec4(position, 1.0); vDir = p.xyz - centro; gl_Position = projectionMatrix * viewMatrix * p; }`,
+    fragmentShader: `uniform samplerCube mappa; uniform float opacita; varying vec3 vDir;
+      void main() {
+        gl_FragColor = vec4(textureCube(mappa, normalize(vDir)).rgb, opacita);
+        #include <colorspace_fragment>
+      }`,
+    side: THREE.BackSide, transparent: true, depthTest: false, depthWrite: false,
+  });
+  const s = new THREE.Mesh(geoSfera, m);
+  s.frustumCulled = false; s.visible = false;
+  scena.add(s);
+  return s;
+}
+const sfere = [nuovaSfera(), nuovaSfera()];               // [quella che si vede, quella libera]
+const posiziona = (s, p) => { s.position.copy(p); s.material.uniforms.centro.value.copy(p); };
+
+// ---------- foto: una risorsa per file (più punti possono condividere la stessa foto)
+const risorse = new Map();
+const risorsa = (file) => {
+  if (!risorse.has(file)) risorse.set(file, { file, url: `panorami/${file}`, esiste: file ? null : false, blob: null, progresso: 0, totale: 0, letti: 0, cubo: null });
+  return risorse.get(file);
+};
+// esiste? una richiesta HEAD, senza scaricare la foto
+async function controlla(r) {
+  if (r.esiste !== null) return r.esiste;
+  try {
+    const x = await fetch(r.url, { method: "HEAD" });
+    r.esiste = x.status === 405 || x.status === 501 ? true : x.ok && !/html/i.test(x.headers.get("content-type") || "");
+  } catch { r.esiste = false; }
+  return r.esiste;
+}
+async function scarica(r, segnale) {
+  const x = await fetch(r.url, { signal: segnale });
+  if (!x.ok || /html/i.test(x.headers.get("content-type") || "")) throw new Error(`${r.file} non disponibile (${x.status})`);
+  r.totale = Number(x.headers.get("content-length")) || 0; r.letti = 0; r.progresso = 0;
+  if (!x.body) { const b = await x.blob(); r.progresso = 1; return b; }
+  const lettore = x.body.getReader(), pezzi = [];
+  for (;;) {
+    const { done, value } = await lettore.read();
+    if (done) break;
+    pezzi.push(value); r.letti += value.length;
+    r.progresso = r.totale ? Math.min(1, r.letti / r.totale) : 0;
+    mostraProgresso(r);
+  }
+  r.progresso = 1;
+  return new Blob(pezzi, { type: "image/jpeg" });
+}
+// coda dei download: uno alla volta. Una foto chiesta con un tocco passa davanti
+// (e interrompe un precaricamento appena iniziato, che riparte dopo).
+const coda = [];
+let inCorso = null;
+function chiedi(r, urgente) {
+  if (r.blob || r.esiste === false || (inCorso && inCorso.r === r)) return;
+  const i = coda.indexOf(r);
+  if (i >= 0) coda.splice(i, 1);
+  if (urgente) { coda.unshift(r); if (inCorso && inCorso.r.progresso < 0.5) inCorso.ctrl.abort(); }
+  else coda.push(r);
+  avanti();
+}
+async function avanti() {
+  if (inCorso || !coda.length) return;
+  const r = coda.shift();
+  if (r.blob || r.esiste === false) return avanti();
+  const ctrl = new AbortController();
+  inCorso = { r, ctrl };
+  try {
+    r.blob = await scarica(r, ctrl.signal);
+    r.esiste = true;
+    r.attesa?.ok(r.blob);
+  } catch (e) {
+    if (e.name === "AbortError") { r.progresso = 0; coda.splice(Math.min(1, coda.length), 0, r); }
+    else { console.info("Foto non disponibile:", r.file); r.esiste = false; r.attesa?.ko(e); mancante(r); }
+  }
+  inCorso = null;
+  mostraProgresso(r);
+  if (r.blob) preparaVicini();
+  avanti();
+}
+function byteDi(r, urgente) {
+  if (r.blob) return Promise.resolve(r.blob);
+  if (r.esiste === false) return Promise.reject(new Error("foto mancante"));
+  if (!r.attesa) { let ok, ko; const p = new Promise((a, b) => { ok = a; ko = b; }); r.attesa = { p, ok, ko }; }
+  chiedi(r, urgente);
+  return r.attesa.p;
+}
+// la foto diventa una cube map (come fa panorama.html con scene.background): niente cuciture, filtri buoni
+const LATO = Math.min(1024, renderer.capabilities.maxCubemapSize || 1024);
+async function faiCubo(blob) {
+  const bmp = await createImageBitmap(blob, { imageOrientation: "flipY" });
+  const tex = new THREE.Texture(bmp);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = false;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.needsUpdate = true;
+  const rt = new THREE.WebGLCubeRenderTarget(Math.min(LATO, Math.max(256, bmp.height >> 1)));
+  rt.fromEquirectangularTexture(renderer, tex);
+  tex.dispose(); bmp.close?.();
+  return rt;
+}
+function cuboDi(r, urgente) {
+  if (r.cubo) return Promise.resolve(r.cubo);
+  if (urgente) chiedi(r, true);
+  if (!r.promessa) {
+    r.promessa = byteDi(r, urgente).then(faiCubo).then(
+      (c) => { r.promessa = null; r.cubo = c; return c; },
+      (e) => { r.promessa = null; throw e; });
+  }
+  return r.promessa;
+}
+
+// ---------- punti
+let dati = null, punti = [], attuale = null, richiesto = null, transizione = null;
+let CASA = "katia";
+const perId = new Map();
+const viciniDi = (p) => (p ? (p.vicini || []).map((id) => perId.get(id)).filter((v) => v && v !== p && v.r.esiste === true) : []);
+const pausa = (ms) => new Promise((ok) => setTimeout(ok, ms));
+const quiete = () => new Promise((ok) => ("requestIdleCallback" in window ? requestIdleCallback(() => ok(), { timeout: 900 }) : setTimeout(ok, 150)));
+
+// precarica solo i vicini del punto attuale, uno alla volta (niente, se il telefono chiede di risparmiare dati)
+function precarica() {
+  const vicini = viciniDi(attuale).map((v) => v.r);
+  for (let i = coda.length - 1; i >= 0; i--) if (!vicini.includes(coda[i]) && coda[i] !== richiesto?.r) coda.splice(i, 1);
+  if (navigator.connection?.saveData) return;
+  vicini.forEach((r) => chiedi(r, false));
+  preparaVicini();
+}
+// le foto scaricate dei vicini diventano cube map quando la pagina è ferma, così il salto parte subito
+let preparando = false;
+async function preparaVicini() {
+  if (preparando || !attuale) return;
+  preparando = true;
+  try {
+    for (;;) {
+      const r = viciniDi(attuale).map((v) => v.r).find((x) => x.blob && !x.cubo && !x.promessa);
+      if (!r) break;
+      await quiete();
+      while (puntatori.size || transizione) await pausa(200);
+      await cuboDi(r).catch(() => {});
+    }
+  } finally { preparando = false; }
+}
+// in memoria video restano solo la foto attuale e quelle dei vicini
+function liberaCubi() {
+  const tieni = new Set([attuale.r, ...viciniDi(attuale).map((v) => v.r)]);
+  if (richiesto) tieni.add(richiesto.r);
+  for (const r of risorse.values()) if (r.cubo && !tieni.has(r)) { r.cubo.dispose(); r.cubo = null; }
+}
+// una foto che non c'è (404) sparisce: niente pulsante, niente anello
+function mancante(r) {
+  for (const p of punti) if (p.r === r && p.el) { p.el.remove(); p.el = null; }
+  if (attuale && anelli.some((a) => a.p.r === r)) costruisciAnelli();
+  if (richiesto?.r === r) { attesa(richiesto, false); richiesto = null; }
+  bordiBarra(); sistemaAvviso();
+}
+
+// ---------- pulsanti in basso e nome in alto
+function costruisciBarra() {
+  const nav = $("punti");
+  nav.textContent = "";
+  for (const p of punti) {
+    p.el = null;
+    if (p.r.esiste !== true) continue;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "punto tasto";
+    const t = document.createElement("span"); t.textContent = p.nome;
+    const av = document.createElement("span"); av.className = "avanza";
+    b.append(t, av);
+    b.addEventListener("click", () => { nascondiSuggerimento(); vai(p); });
+    const su = () => { evidenziato = p; sporco = true; }, giu = () => { if (evidenziato === p) evidenziato = null; sporco = true; };
+    b.addEventListener("pointerenter", (e) => e.pointerType === "mouse" && su());
+    b.addEventListener("pointerleave", giu);
+    b.addEventListener("focus", su); b.addEventListener("blur", giu);
+    nav.append(b);
+    p.el = b;
+  }
+}
+function segnaPunto(p) {
+  for (const q of punti) if (q.el) {
+    if (q === p) {
+      if (!q.el.hasAttribute("aria-current") && $("punti").scrollWidth > $("punti").clientWidth)
+        q.el.scrollIntoView({ inline: "center", block: "nearest", behavior: ridotto ? "auto" : "smooth" });
+      q.el.setAttribute("aria-current", "location");
+    } else q.el.removeAttribute("aria-current");
+  }
+  const n = $("nome-punto");
+  if (n.textContent !== p.nome) {
+    n.textContent = p.nome;
+    if (!ridotto && T.pronto) n.animate([{ opacity: 0, transform: "translateY(5px)" }, { opacity: 1, transform: "none" }], { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+  }
+  document.title = `${p.nome}, ${dati.nome || "visita"} a 360 gradi`;
+  const stanza = p.nome.split(",")[0].trim();
+  $("btn-cammina").href = `index.html?casa=${encodeURIComponent(CASA)}${stanza ? "&stanza=" + encodeURIComponent(stanza) : ""}`;
+}
+function bordiBarra() {
+  const n = $("punti"), extra = n.scrollWidth - n.clientWidth;
+  n.classList.toggle("scorre-sx", extra > 2 && n.scrollLeft > 2);
+  n.classList.toggle("scorre-dx", extra > 2 && n.scrollLeft < extra - 2);
+}
+// l'avviso sta in basso a sinistra; se la barra dei punti è larga e lo toccherebbe, sale sopra la barra
+function sistemaAvviso() {
+  const av = $("avviso"), n = $("punti");
+  av.classList.remove("sopra");
+  if (!n.children.length) return;
+  if (n.getBoundingClientRect().left < av.getBoundingClientRect().right + 12) av.classList.add("sopra");
+}
+const mega = (b) => (b ? (b / 1048576).toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " MB" : "");
+function mostraProgresso(r) {
+  if (!T.pronto) {
+    if (caricaIniziale !== r) return;
+    const noto = r.totale > 0;
+    $("binario").classList.toggle("indefinito", !noto && r.progresso < 1);
+    $("barra").style.transform = `scaleX(${noto ? r.progresso : r.progresso >= 1 ? 1 : 0})`;
+    $("carica-pct").textContent = noto ? Math.round(r.progresso * 100) + "%" : r.progresso >= 1 ? "100%" : mega(r.letti);
+    return;
+  }
+  const p = richiesto;
+  if (!p || p.r !== r) return;
+  const noto = r.totale > 0 || r.progresso >= 1;
+  for (const el of [p.el, anelli.find((a) => a.p === p)?.el]) {
+    if (!el) continue;
+    el.classList.toggle("indefinito", !noto);
+    el.style.setProperty("--p", noto ? r.progresso.toFixed(3) : "0");
+    const pct = el.querySelector(".pct");
+    if (pct) pct.textContent = noto ? Math.round(r.progresso * 100) + "%" : mega(r.letti);
+  }
+}
+function attesa(p, si) {
+  for (const el of [p.el, anelli.find((a) => a.p === p)?.el]) if (el) { el.classList.toggle("carica", si); if (!si) el.classList.remove("indefinito"); }
+  if (si) mostraProgresso(p.r);
+  sporco = true;
+}
+
+// ---------- anelli sul pavimento, nella posizione vera dei vicini
+const DIAM = 0.5, R_ANELLO = DIAM * (90 / 256);         // l'anello disegnato ha raggio 90 px su 256
+function texturaAnello(soloBordo) {
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d"), m = 128;
+  if (!soloBordo) {
+    // ombra morbida sotto: stacca l'anello anche dai pavimenti chiari
+    const o = g.createRadialGradient(m, m, 62, m, m, 127);
+    o.addColorStop(0, "rgba(6,12,10,0)"); o.addColorStop(0.42, "rgba(6,12,10,0.34)"); o.addColorStop(1, "rgba(6,12,10,0)");
+    g.fillStyle = o; g.fillRect(0, 0, 256, 256);
+    g.beginPath(); g.arc(m, m, 84, 0, Math.PI * 2); g.fillStyle = "rgba(107,188,174,0.26)"; g.fill();
+  }
+  g.beginPath(); g.arc(m, m, 90, 0, Math.PI * 2);
+  g.lineWidth = soloBordo ? 9 : 13; g.strokeStyle = "rgba(242,241,237,0.96)"; g.stroke();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+const geoAnello = new THREE.PlaneGeometry(DIAM, DIAM).rotateX(-Math.PI / 2);
+const texAnello = texturaAnello(false), texAlone = texturaAnello(true);
+let anelli = [], sopra = null, evidenziato = null, premuto = null, arrivo = 0;
+function costruisciAnelli() {
+  for (const a of anelli) { scena.remove(a.mesh, a.alone); a.mesh.material.dispose(); a.alone.material.dispose(); a.el.remove(); }
+  anelli = viciniDi(attuale).map((p) => {
+    const mat = (map) => new THREE.MeshBasicMaterial({ map, transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+    const mesh = new THREE.Mesh(geoAnello, mat(texAnello)), alone = new THREE.Mesh(geoAnello, mat(texAlone));
+    const pos = in3d(p.pos[0], p.pos[1], 0.004);         // all'altezza del pavimento, anche oltre i muri
+    mesh.position.copy(pos); alone.position.copy(pos);
+    mesh.renderOrder = 4; alone.renderOrder = 3;
+    scena.add(alone, mesh);
+    const el = document.createElement("div");
+    el.className = "etichetta";
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "vetro tasto"; b.tabIndex = -1;
+    b.innerHTML = '<i class="ph ph-footprints" aria-hidden="true"></i><span class="nome"></span><span class="pct"></span><span class="avanza"></span>';
+    b.querySelector(".nome").textContent = p.nome;
+    b.addEventListener("click", () => { nascondiSuggerimento(); vai(p); });
+    b.addEventListener("pointerenter", () => { sopra = p; sporco = true; });
+    b.addEventListener("pointerleave", () => { if (sopra === p) sopra = null; sporco = true; });
+    el.append(b);
+    $("etichette").append(el);
+    return { p, mesh, alone, el, vis: 0, scala: 0.9, box: null, ultimo: "" };
+  });
+  if (richiesto) attesa(richiesto, true);
+  arrivo = performance.now();
+  sporco = true;
+}
+// ingombro dell'anello sullo schermo (è in prospettiva: un'ellisse più piccola se lontana)
+const _v = new THREE.Vector3();
+function aSchermo(v3) {
+  _v.copy(v3).applyMatrix4(camera.matrixWorldInverse);
+  if (_v.z > -0.08) return null;                            // dietro la camera
+  _v.applyMatrix4(camera.projectionMatrix);
+  return [(_v.x + 1) / 2 * innerWidth, (1 - _v.y) / 2 * innerHeight];
+}
+const _q = new THREE.Vector3();
+function scatola(a) {
+  const c = aSchermo(a.mesh.position);
+  if (!c) return null;
+  let x0 = c[0], x1 = c[0], y0 = c[1], y1 = c[1];
+  const r = R_ANELLO * a.scala;
+  for (let i = 0; i < 12; i++) {
+    const t = (i / 12) * Math.PI * 2;
+    const s = aSchermo(_q.copy(a.mesh.position).add(_v.set(Math.cos(t) * r, 0, Math.sin(t) * r)));
+    if (!s) continue;
+    x0 = Math.min(x0, s[0]); x1 = Math.max(x1, s[0]); y0 = Math.min(y0, s[1]); y1 = Math.max(y1, s[1]);
+  }
+  const W = innerWidth, H = innerHeight;
+  if (x1 < -40 || x0 > W + 40 || y1 < -40 || y0 > H + 40) return null;
+  return { cx: c[0], cy: c[1], x0, x1, y0, y1 };
+}
+function anelloSotto(x, y) {
+  let meglio = null, d0 = 1;
+  for (const a of anelli) {
+    if (!a.box || a.vis < 0.3) continue;
+    const { cx, cy, x0, x1, y0, y1 } = a.box;
+    const rx = Math.max(24, (x1 - x0) / 2 + 8), ry = Math.max(24, (y1 - y0) / 2 + 8);   // almeno 48 px da toccare
+    const d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
+    if (d <= d0) { d0 = d; meglio = a; }
+  }
+  return meglio;
+}
+function aggiornaAnelli(dt, ora) {
+  let anima = false;
+  const W = innerWidth, H = innerHeight, tp = (ora - arrivo) / 1000;
+  for (const a of anelli) {
+    const voluto = transizione ? 0 : 1;
+    a.vis += (voluto - a.vis) * (1 - Math.exp(-dt * (voluto ? 6 : 16)));
+    if (Math.abs(voluto - a.vis) < 0.003) a.vis = voluto; else anima = true;
+    const acceso = sopra === a.p || evidenziato === a.p || richiesto === a.p;
+    const sc = premuto === a.p ? 0.92 : acceso ? 1.12 : 1;
+    a.scala += (sc - a.scala) * (1 - Math.exp(-dt * 14));
+    if (Math.abs(sc - a.scala) < 0.002) a.scala = sc; else anima = true;
+    a.mesh.scale.setScalar(a.scala);
+    a.mesh.material.opacity = a.vis * (acceso ? 1 : 0.88);
+    // un'onda leggera nei primi secondi in ogni punto: fa capire che l'anello si tocca
+    if (!ridotto && tp < 9 && a.vis > 0.01) {
+      const f = ((tp + 0.4) % 2.4) / 2.4;
+      a.alone.scale.setScalar(a.scala * (1 + f * 0.75));
+      a.alone.material.opacity = a.vis * 0.6 * (1 - f) * (1 - f);
+      anima = true;
+    } else a.alone.material.opacity = 0;
+    a.box = a.vis > 0.01 ? scatola(a) : null;
+    // pillola col nome: al passaggio del mouse; sul telefono quando l'anello è vicino al centro
+    const centro = touch && a.box && Math.abs(a.box.cx - W / 2) < W * 0.22 && a.box.cy > 0 && a.box.cy < H;
+    const mostra = !transizione && a.box && a.vis > 0.5 && (acceso || centro);
+    a.el.classList.toggle("vista", !!mostra);
+    if (a.box) {
+      const x = limita((a.box.x0 + a.box.x1) / 2, 70, W - 70), y = limita(a.box.y0 - 10, 70, H - 16);
+      const s = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -100%)`;
+      if (s !== a.ultimo) { a.el.style.transform = s; a.ultimo = s; }
+    }
+  }
+  canvas.classList.toggle("su-anello", !!(sopra && anelli.some((a) => a.p === sopra && a.box)) && !puntatori.size);
+  return anima;
+}
+
+// ---------- salto da un punto all'altro: stessa direzione di sguardo, breve avanzata, dissolvenza incrociata
+const molla = (t) => { const w = 7.5; return Math.min(1, (1 - Math.exp(-w * t) * (1 + w * t)) / (1 - Math.exp(-w) * (1 + w))); };
+const morbido = (a, b, t) => { const x = limita((t - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); };
+async function vai(id, subito = false) {
+  const p = typeof id === "string" ? perId.get(id) : id;
+  if (!p || !attuale || p === attuale || p.r.esiste !== true || transizione) return false;
+  if (richiesto && richiesto !== p) attesa(richiesto, false);
+  richiesto = p;
+  if (!p.r.cubo) attesa(p, true);                          // la foto non è pronta: avanzamento sulla pillola
+  let cubo;
+  try { cubo = await cuboDi(p.r, true); }
+  catch { attesa(p, false); if (richiesto === p) richiesto = null; return false; }
+  attesa(p, false);
+  if (richiesto !== p || transizione || p === attuale) return false;
+  richiesto = null;
+  return parti(p, cubo, subito);
+}
+function parti(p, cubo, subito) {
+  const A = in3d(...attuale.pos), B = in3d(...p.pos);
+  const dir = B.clone().sub(A), dist = dir.length();
+  if (dist > 1e-6) dir.divideScalar(dist);
+  const passo = subito || ridotto ? 0 : Math.min(0.6, dist * 0.35);
+  const E = A.clone().addScaledVector(dir, passo);
+  const [vecchia, nuova] = sfere;
+  nuova.material.uniforms.mappa.value = cubo.texture;
+  nuova.material.uniforms.opacita.value = 0;
+  posiziona(nuova, E);
+  vecchia.renderOrder = 0; nuova.renderOrder = 1; nuova.visible = true;
+  segnaPunto(p);
+  return new Promise((fine) => {
+    transizione = { a: p, A, B, E, t0: performance.now(), durata: subito ? 0 : (ridotto ? 260 : 660) * LENTO, vecchia, nuova, fine };
+    sporco = true;
+  });
+}
+function passoTransizione(ora) {
+  const tr = transizione, t = tr.durata ? Math.min(1, (ora - tr.t0) / tr.durata) : 1;
+  camera.position.lerpVectors(tr.A, tr.E, molla(t));
+  tr.nuova.material.uniforms.opacita.value = ridotto ? t : morbido(0.06, 0.74, t);
+  if (t < 1) return;
+  // arrivati: sfera e camera tornano sul punto vero (la camera è nel centro della sfera, non cambia nulla a vista)
+  posiziona(tr.nuova, tr.B); camera.position.copy(tr.B);
+  tr.nuova.material.uniforms.opacita.value = 1; tr.nuova.renderOrder = 0;
+  tr.vecchia.visible = false; tr.vecchia.material.uniforms.mappa.value = null;
+  sfere.reverse();
+  attuale = tr.a; transizione = null;
+  costruisciAnelli(); liberaCubi(); precarica(); scriviIndirizzo();
+  tr.fine(true);
+}
+function scriviIndirizzo() {
+  try { const u = new URL(location.href); u.searchParams.set("punto", attuale.id); history.replaceState(null, "", u); } catch {}
+}
+
+// ---------- caricamento
+let caricaIniziale = null;
+async function carica() {
+  const x = await fetch(`panorami/${FILE_PUNTI}`);
+  if (!x.ok) throw new Error(`${FILE_PUNTI} non trovato`);
+  dati = await x.json();
+  CASA = pulito(par.get("casa")) || pulito(dati.casa) || "katia";
+  punti = (dati.punti || []).filter((p) => p && p.id && Array.isArray(p.pos) && p.pos.length >= 2)
+    .map((p) => ({ ...p, nome: p.nome || p.id, r: risorsa(pulito(p.file)) }));
+  punti.forEach((p) => perId.set(p.id, p));
+  if (!punti.length) throw new Error("nessun punto nel file");
+  $("carica-nome").textContent = dati.nome || "Visita a 360 gradi";
+  $("nome-casa").textContent = dati.nome || "";
+
+  // la partenza si scarica subito; intanto si controlla quali altre foto esistono già
+  let partenza = perId.get(par.get("punto")) || perId.get(dati.partenza) || punti[0];
+  const controlli = Promise.all([...new Set(punti.map((p) => p.r))].filter((r) => r !== partenza.r).map(controlla));
+  for (;;) {
+    caricaIniziale = partenza.r;
+    mostraProgresso(partenza.r);
+    try { await cuboDi(partenza.r, true); break; }
+    catch {
+      partenza.r.esiste = false;
+      await controlli;
+      partenza = punti.find((p) => p.r.esiste !== false);
+      if (!partenza) throw new Error("nessuna foto disponibile");
+      $("carica-stato").textContent = "Carico la vista";
+    }
+  }
+  await controlli;
+  partenza.r.esiste = true;
+  attuale = partenza;
+  const s = sfere[0];
+  s.material.uniforms.mappa.value = partenza.r.cubo.texture;
+  posiziona(s, in3d(...partenza.pos)); s.visible = true;
+  camera.position.copy(in3d(...partenza.pos));
+  const y = Number(par.get("yaw")), primo = viciniDi(partenza)[0];
+  vista.yaw = par.get("yaw") !== null && Number.isFinite(y) ? rad(y) : primo ? rotta(partenza, primo) : 0;
+  costruisciBarra();
+  segnaPunto(partenza);
+  costruisciAnelli();
+  aggiornaCamera();
+  renderer.render(scena, camera);
+  $("barra").style.transform = "scaleX(1)"; $("binario").classList.remove("indefinito"); $("carica-pct").textContent = "100%";
+  $("carica").classList.add("finito");
+  ["intestazione", "punti", "avviso"].forEach((id) => $(id).classList.remove("nascosto"));
+  requestAnimationFrame(() => { bordiBarra(); sistemaAvviso(); });
+  const conVicini = punti.some((p) => p.r.esiste === true && viciniDi(p).length);
+  $("suggerimento-testo").textContent = !conVicini ? "Trascina per guardarti intorno"
+    : touch ? "Trascina per guardarti intorno, tocca un cerchio per spostarti" : "Trascina per guardarti intorno, clicca un cerchio per spostarti";
+  setTimeout(() => !suggerimentoVisto && $("suggerimento").classList.remove("nascosto"), 700);
+  Object.assign(T, {
+    pronto: true,
+    vai: (id, subito = false) => vai(id, subito),
+    guarda: (yaw, pitch, fov) => {
+      vista.yaw = rad(yaw ?? gradi(vista.yaw));
+      if (pitch !== undefined && pitch !== null) vista.pitch = limita(rad(pitch), -1.45, 1.45);
+      if (fov) { vista.fov = limita(fov, 35, 100); zoomato = true; }
+      vel.yaw = vel.pitch = 0; sporco = true;
+    },
+    stato: () => ({
+      punto: attuale.id, yaw: +gradi(vista.yaw).toFixed(1), pitch: +gradi(vista.pitch).toFixed(1), fov: vista.fov, transizione: !!transizione,
+      disponibili: punti.filter((p) => p.r.esiste === true).map((p) => p.id),
+      anelli: anelli.map((a) => ({ id: a.p.id, x: a.box && Math.round(a.box.cx), y: a.box && Math.round(a.box.cy), etichetta: a.el.classList.contains("vista") })),
+      scaricate: [...risorse.values()].filter((r) => r.blob).map((r) => r.file),
+      inMemoria: [...risorse.values()].filter((r) => r.cubo).map((r) => r.file),
+    }),
+  });
+  precarica();
+}
+
+// ---------- comandi: trascina (afferri la stanza, con inerzia), rotella e due dita per lo zoom, frecce, tocco sugli anelli
+const puntatori = new Map();
+let distPinch = 0, inizio = null, mosso = 0, suggerimentoVisto = false;
+function nascondiSuggerimento() { suggerimentoVisto = true; $("suggerimento").classList.add("nascosto"); }
+canvas.addEventListener("pointerdown", (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  puntatori.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (puntatori.size === 1) {
+    inizio = { x: e.clientX, y: e.clientY, t: performance.now() }; mosso = 0; vel.yaw = vel.pitch = 0;
+    premuto = anelloSotto(e.clientX, e.clientY)?.p || null;
+  }
+  if (puntatori.size === 2) { const [a, b] = [...puntatori.values()]; distPinch = Math.hypot(a.x - b.x, a.y - b.y); mosso = 99; premuto = null; }
+  sporco = true;
+});
+canvas.addEventListener("pointermove", (e) => {
+  const p = puntatori.get(e.pointerId);
+  if (!p) {                                                // solo passaggio del mouse: si accende l'anello sotto
+    if (e.pointerType === "mouse") { const a = anelloSotto(e.clientX, e.clientY); if ((a?.p || null) !== sopra) { sopra = a?.p || null; sporco = true; } }
+    return;
+  }
+  if (puntatori.size === 2) {
+    puntatori.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const [a, b] = [...puntatori.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    vista.fov = limita(vista.fov * distPinch / d, 35, 100); distPinch = d; zoomato = true; sporco = true; return;
+  }
+  const dx = e.clientX - p.x, dy = e.clientY - p.y, k = 0.0035 * vista.fov / 75;
+  puntatori.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  mosso = Math.max(mosso, Math.hypot(e.clientX - inizio.x, e.clientY - inizio.y));
+  if (mosso > 6) { canvas.classList.add("trascina"); nascondiSuggerimento(); premuto = null; sopra = null; }
+  vista.yaw -= dx * k; vista.pitch = limita(vista.pitch + dy * k, -1.45, 1.45);
+  vel.yaw = -dx * k * 0.5; vel.pitch = dy * k * 0.5; sporco = true;
+});
+function fine(e) {
+  if (!puntatori.has(e.pointerId)) return;
+  const unico = puntatori.size === 1;
+  puntatori.delete(e.pointerId);
+  if (!puntatori.size) canvas.classList.remove("trascina");
+  if (unico && mosso <= 6 && performance.now() - inizio.t < 600 && e.type === "pointerup") {
+    vel.yaw = vel.pitch = 0;
+    const a = anelloSotto(e.clientX, e.clientY);
+    if (a) { nascondiSuggerimento(); vai(a.p); }
+  }
+  premuto = null;
+  if (ridotto) vel.yaw = vel.pitch = 0;
+  sporco = true;
+}
+canvas.addEventListener("pointerup", fine);
+canvas.addEventListener("pointercancel", fine);
+canvas.addEventListener("pointerleave", () => { if (!puntatori.size && sopra) { sopra = null; sporco = true; } });
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); vista.fov = limita(vista.fov + e.deltaY * 0.03, 35, 100); zoomato = true; sporco = true; nascondiSuggerimento(); }, { passive: false });
+const tasti = new Set();
+addEventListener("keydown", (e) => { if (e.key.startsWith("Arrow")) { tasti.add(e.key); e.preventDefault(); nascondiSuggerimento(); } });
+addEventListener("keyup", (e) => tasti.delete(e.key));
+addEventListener("blur", () => tasti.clear());
+$("punti").addEventListener("scroll", bordiBarra, { passive: true });
+$("btn-schermo").addEventListener("click", () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()));
+document.addEventListener("fullscreenchange", () => {
+  $("btn-schermo").querySelector("i").className = document.fullscreenElement ? "ph ph-corners-in" : "ph ph-corners-out";
+  $("btn-schermo").setAttribute("aria-label", document.fullscreenElement ? "Esci da schermo intero" : "Schermo intero");
+});
+if (!document.fullscreenEnabled) $("btn-schermo").hidden = true;
+
+// ---------- ciclo: si disegna solo quando qualcosa cambia
+function ridimensiona() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  if (!zoomato) vista.fov = fovBase();
+  camera.fov = vista.fov; camera.updateProjectionMatrix();
+  bordiBarra(); sistemaAvviso();
+  sporco = true;
+}
+addEventListener("resize", ridimensiona);
+ridimensiona();
+let prima = performance.now();
+renderer.setAnimationLoop((ora) => {
+  const dt = Math.min(0.05, (ora - prima) / 1000); prima = ora;
+  if (!attuale) return;
+  if (transizione) { passoTransizione(ora); sporco = true; }
+  if (tasti.has("ArrowLeft")) { vista.yaw -= 1.2 * dt; sporco = true; }
+  if (tasti.has("ArrowRight")) { vista.yaw += 1.2 * dt; sporco = true; }
+  if (tasti.has("ArrowUp")) { vista.pitch = Math.min(1.45, vista.pitch + dt); sporco = true; }
+  if (tasti.has("ArrowDown")) { vista.pitch = Math.max(-1.45, vista.pitch - dt); sporco = true; }
+  if (!puntatori.size && (Math.abs(vel.yaw) > 1e-4 || Math.abs(vel.pitch) > 1e-4)) {
+    vista.yaw += vel.yaw; vista.pitch = limita(vista.pitch + vel.pitch, -1.45, 1.45);
+    vel.yaw *= 0.86; vel.pitch *= 0.86; sporco = true;
+  }
+  aggiornaCamera();
+  if (aggiornaAnelli(dt, ora)) sporco = true;
+  if (!sporco) return;
+  renderer.render(scena, camera);
+  sporco = false;
+});
+carica().catch((e) => {
+  console.error(e);
+  $("carica-stato").textContent = "Qualcosa non ha funzionato";
+  $("binario").classList.remove("indefinito");
+  $("errore").style.display = "block";
+});
+</script>
+</body>
+</html>
